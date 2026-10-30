@@ -196,7 +196,7 @@
     var lines = cands.map(function (x, i) {
       return (i + 1) + '. ' + x.text + (x.hint ? '（' + x.hint + '）' : '');
     }).join('\n');
-    var sys = '你在玩《超能斗兽棋》（船长自制斗兽棋的网页版），你执' + sideName(st.turn) + '方，对手是' + (st.turn === 'red' ? '蓝' : '红') + '方。' +
+    var sys = '你在玩《超能斗兽棋》（自制斗兽棋的网页版），你执' + sideName(st.turn) + '方，对手是' + (st.turn === 'red' ? '蓝' : '红') + '方。' +
       '每回合只能从给定候选里挑一手，别自己发明动作。\n规则：\n' + RULES +
       '\n回答必须是严格 JSON，不要多余文字：{"pick": 序号(整数), "think": "80~200字的盘算，像人一样想，可以权衡风险和赌一把", "say": "一句话碎嘴（不超过20字）"}';
     var user = '棋盘（水=深水区，暗=背面朝上，空=空格）：\n' + boardText(st) + '\n\n局面：\n' + rosterText(st) +
