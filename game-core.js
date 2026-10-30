@@ -1,6 +1,6 @@
 /* =============================================================================
  * 超能斗兽棋 —— 纯逻辑引擎（无 UI、无依赖、可在 node 里跑）
- * 设计：船长（初中纸片自制游戏）规则复现 + 空白处裁定补全
+ * 设计：源自初中纸片自制游戏规则复现 + 空白处裁定补全
  * 用法：浏览器 <script src="game-core.js"> 得到 window.CaptainBeast
  *       node   require('./game-core.js')  得到 module.exports
  * ========================================================================== */
@@ -208,7 +208,7 @@
     return escapeOwner(st) || st.turn;
   }
 
-  // 「活着」= 还能动的兵力。冰封中的恐龙是中立困兽，不替任何一方算数（船长 2026-10-17 裁定）
+  // 「活着」= 还能动的兵力。冰封中的恐龙是中立困兽，不替任何一方算数（2026-10-17 裁定）
   function alive(st, owner) {
     var n = 0;
     for (var i = 0; i < st.board.length; i++) {
@@ -305,7 +305,7 @@
     if (!u || !u.revealed || u.jailed > 0) return [];
     if (u.kind === 'dino' && u.frozen) return [];
     var out = [];
-    // 己方等级≥7 的动物可以敲自家冰冻的恐龙，帮它解冻（一次一层，占回合；船长 2026 裁定）
+    // 己方等级≥7 的动物可以敲自家冰冻的恐龙，帮它解冻（一次一层，占回合；2026 裁定）
     if (u.level >= 7 && crackAllowed(st)) {
       for (var d1 = 0; d1 < 4; d1++) {
         var r1 = rc(cell).r + DIR8[d1].dr, c1 = rc(cell).c + DIR8[d1].dc;
@@ -364,7 +364,7 @@
         steps++; r += dr; c += dc;
       }
     }
-    // 翱翔＝「多一种走法」，不是「换一种走法」的心智（船长 2026-10-18 裁定）。
+    // 翱翔＝「多一种走法」，不是「换一种走法」的心智（2026-10-18 裁定）。
     // 追加在通用循环之后：贴着走得到的格子仍记作普通移动，只有够不着的远方才标成 fly。
     // 鹏鸟本身没有侧击/疾行/巨力，走通用循环与旧分支完全等价（四方向一格 + 贴身照常吃）；
     // 吃过鹏鸟的熊猫则把飞行与它已经学到的地面吃法叠在一起——否则吃一只鸟反倒会变弱。
@@ -423,13 +423,13 @@
   }
 
   // 「无人可挡」：对方场上没有任何动物吃得掉它（含鼠吃象特例）。
-  // 对方的暗牌按「可能有威胁」算。只算等级与吃子特例，不把技能算进去（船长 2026-10-18 定）。
+  // 对方的暗牌按「可能有威胁」算。只算等级与吃子特例，不把技能算进去（2026-10-18 定）。
   function unbeatableUnits(st, owner) {
     var foe = owner === 'red' ? 'blue' : 'red', out = [];
     for (var i = 0; i < st.board.length; i++) {
       var u = st.board[i];
       if (!u || u.owner !== owner || !u.revealed) continue;
-      // 冰封的恐龙是中立困兽：不参与决算（船长 2026-10-18 裁定）——
+      // 冰封的恐龙是中立困兽：不参与决算（2026-10-18 裁定）——
       // 解不解封是它主人的决策，决算不替他兜底。
       if (u.kind === 'dino' && u.frozen) continue;
       var safe = true;
@@ -445,7 +445,7 @@
     return out;
   }
 
-  // 双方都磨不动时的兜底（船长 2026-10-18 反馈：原来的「比总和」会让必败方靠飞行躲到决算捡赢）
+  // 双方都磨不动时的兜底（2026-10-18 反馈：原来的「比总和」会让必败方靠飞行躲到决算捡赢）
   // 先看有没有「无人可挡」的动物：只有一方握有它时，僵持改变不了结局，直接判该方胜；
   // 双方都没有（或有来有回）才回到等级总和决算。
   function settleByRank(st, events) {
@@ -473,7 +473,7 @@
     });
   }
 
-  // ---- 棋谱：悔棋与复盘（船长 2026-10-17 要的）----------------------------
+  // ---- 棋谱：悔棋与复盘（2026-10-17 要的）----------------------------
   // history 里每一条是「走这一步之前」的局面快照，条目自带一句人话说明。
   function cellName(i) { return '(' + (Math.floor(i / N) + 1) + ',' + (i % N + 1) + ')'; }
   var SKILL_CN = { blast: '自爆', pounce: '猛扑', volley: '狮王矢', freeze: '冰封', shock: '冲击波', meteor: '陨石', kunwave: '十字波涛' };
@@ -708,7 +708,7 @@
     var defKind = def.kind;
     events.push({ t: 'attack', text: NAME[atk.kind] + ' 吃 ' + NAME[def.kind] });
     // 冰封的恐龙是无敌的：任何攻击撞上去都只是敲冰（一次一层），攻方留在原地、占回合
-    // （船长 2026-10-16 裁定：大象的撞击是解封恐龙，而不是连冰块吞下）
+    // （2026-10-16 裁定：大象的撞击是解封恐龙，而不是连冰块吞下）
     if (def.kind === 'dino' && def.frozen) {
       atk.moves = Math.max(0, atk.moves - 1);
       if (crackAllowed(st)) {
@@ -748,7 +748,7 @@
     return false;
   }
 
-  // 吃啥补啥：熊猫只学「被动、能反复用」的能力（船长 2026-10-16 裁定）
+  // 吃啥补啥：熊猫只学「被动、能反复用」的能力（2026-10-16 裁定）
   //   · 学得到：猫侧击、狗疾行、狼连吃、象巨力、鹏鸟翱翔
   //   · 学不到：豹自爆、虎猛扑、狮王矢、企鹅冰封（都是一次性招数），恐龙的冲击波/陨石同理 —— 吃了只涨等级
   // 以后要加新能力，只把「被动·无限次」的写进 LEARNABLE，并接上 moveTargets/skillsFor 里的 hasXxx 判断。
@@ -771,7 +771,7 @@
     }
   }
 
-  // 鹏鸟吞下敌方企鹅 → 化身为「鲲」（船长 2026-10-18 追加的特殊变种）：
+  // 鹏鸟吞下敌方企鹅 → 化身为「鲲」（2026-10-18 追加的特殊变种）：
   // 等级升到 7，失去翱翔（不能再飞），换来会游泳（可进中央深水），并得到一次性的「十字波涛」。
   // 变身只是换 kind / level，owner、id、moves 都不动 —— 吃子这一手照常结束。
   function evolveToKun(atk, atkCell, events) {
@@ -837,7 +837,7 @@
   }
 
   function checkOver(st, events) {
-    // 冰封中的恐龙不算兵力（船长 2026-10-17：它是中立存在，不影响胜局）
+    // 冰封中的恐龙不算兵力（2026-10-17：它是中立存在，不影响胜局）
     var r = alive(st, 'red'), b = alive(st, 'blue');
     var rIce = hasIce(st, 'red'), bIce = hasIce(st, 'blue');
     if (r === 0 && b === 0) {
@@ -893,7 +893,7 @@
 
     if (action.skill === 'pounce') {
       var t3 = st.board[action.target];
-      // 冰封中的恐龙是中立困兽，谁的猛扑都能砸它（船长 2026-10-17）
+      // 冰封中的恐龙是中立困兽，谁的猛扑都能砸它（2026-10-17）
       var anyIce = !!(t3 && t3.kind === 'dino' && t3.frozen);
       if (!t3 || (!anyIce && t3.owner === me) || !t3.revealed) return fail(st, events, '猛扑目标是相邻的已公开敌方单位（冰封中的恐龙谁都能砸）');
       if (Math.abs(rc(action.cell).r - rc(action.target).r) + Math.abs(rc(action.cell).c - rc(action.target).c) !== 1)
@@ -913,11 +913,11 @@
       var dir = DIR8[action.dir];
       if (!dir) return fail(st, events, '需要选择一个方向');
       var q = rc(action.cell), rr = q.r + dir.dr, cc = q.c + dir.dc, hitCells = [];
-      // 削弱（船长 2026-10-16）：不再穿障——遇到第一个挡路的单位就停下，
+      // 削弱（2026-10-16）：不再穿障——遇到第一个挡路的单位就停下，
       // 只有那一个「已公开的敌人」会挨这一箭；暗牌挡箭不掉血
       while (inBoard(rr, cc) && !st.board[idx(rr, cc)]) { rr += dir.dr; cc += dir.dc; }
       var armor = inBoard(rr, cc) ? st.board[idx(rr, cc)] : null;
-      // 冰封中的恐龙是中立困兽：谁的箭射中它，都是帮它敲掉一层冰（船长 2026-10-17）
+      // 冰封中的恐龙是中立困兽：谁的箭射中它，都是帮它敲掉一层冰（2026-10-17）
       var anyIce2 = !!(armor && armor.revealed && armor.kind === 'dino' && armor.frozen);
       if (armor && armor.revealed && (armor.owner !== me || anyIce2)) hitCells.push(idx(rr, cc));
       events.push({ t: 'volley', text: '狮王矢沿「' + dir.name + '」射出（威力 7）'
@@ -1002,7 +1002,7 @@
     return fail(st, events, '技能未实现');
   }
 
-  // ---- 结算预览（船长 2026-10-17）-------------------------------------------
+  // ---- 结算预览（2026-10-17）-------------------------------------------
   // 不动手，先把这一招「会打死谁、谁扛得住」算出来。
   // 军师评分（game-ai.js）和 AI 棋手的说明书（game-llm.js）都用它，
   // 免得两边各算一遍、各错一遍（「对着 7 级狮 + 8 级象放 5.5 自爆」就是这么来的）。
@@ -1133,7 +1133,7 @@
         }
         return;                                      // 解冻当次不结算伤害
       } else {
-        // 船长 2026-10-18 裁定：冰封恐龙「无法被击杀」，所以它和别的扛住者一样会被击退
+        // 2026-10-18 裁定：冰封恐龙「无法被击杀」，所以它和别的扛住者一样会被击退
         // （冰层本身不裂 —— 破冰仍要威力 ≥7；只是整块冰被推着走）
         if (pushSurvive && pushDir) {
           pushUnit(st, cell, pushDir, events);
