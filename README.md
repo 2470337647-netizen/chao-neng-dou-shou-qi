@@ -2,7 +2,12 @@
 
 船长初中用纸片自制的斗兽棋，复刻成能直接玩的网页版。24 张手搓卡牌、5×5 暗牌棋盘、连阵营都藏在背面。
 
-**在线玩**：<https://jdj8jsmd.vibedrop.site>
+**在线玩**：
+
+- GitHub Pages（主站）：<https://2470337647-netizen.github.io/chao-neng-dou-shou-qi/>
+- VibeDrop（备用镜像）：<https://jdj8jsmd.vibedrop.site>
+
+主站带版本历史，改版后跟着仓库走；VibeDrop 是独立的一份拷贝，互不影响。
 
 ---
 
@@ -61,6 +66,19 @@ node _build/build-single.mjs # 重新打单文件
 页面内置几个自检彩蛋：`?ui=1` 自动点一遍悔棋/复盘/候选/战绩/规则书并把结果写进战报，`?fx=giant` 反复放天降特效，`?sim=escape` 摆一个「鼠被吃」的局面验证逃生落点归谁点。
 
 ## 发布
+
+### GitHub Pages（主站）
+
+仓库：<https://github.com/2470337647-netizen/chao-neng-dou-shou-qi>
+
+```powershell
+$env:GHT = 'github_pat_xxx'   # fine-grained token：Contents + Pages + Administration 读写
+node _build\gh-deploy.mjs all # 第一次建仓 + 传文件 + 开 Pages；再跑就是更新
+```
+
+脚本走 GitHub REST API，不需要本机装 git。它上传 `index.html`（单文件版）、`README.md`、`规则书.md` 和四个源码文件；`README` 里的路径与本地一致，改完重跑一遍就同步了。Pages 首次生效约 30~90 秒。
+
+### VibeDrop（备用镜像）
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\24703\Desktop\chatbox\publish.ps1 `
