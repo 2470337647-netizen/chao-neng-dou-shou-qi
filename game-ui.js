@@ -81,7 +81,23 @@
     return '第 ' + no + ' 回合 · 轮到' + (s.turn === 'red' ? '红方' : '蓝方');
   }
 
-  // 决算倒计时：连续 20 手没有实质进展就到决算，剩 10 手以内开始提醒（船长 2026-10-18 要的）
+  // 回合条下面那一行「上一手」简报：直接取引擎写好的棋谱标签，谁动了什么、吃掉谁一目了然。
+  // 悔棋/新局会自动跟着 st.history 缩回去，复盘时不重复（复盘条自己带标签）。
+  function paintTurnRep() {
+    var el = $('turnRep'), tx = $('turnRepText'), lb = $('turnRepLb');
+    if (!el || !tx) return;
+    var txt = '';
+    if (!replay && st && st.history && st.history.length) {
+      txt = String(st.history[st.history.length - 1].label || '').trim();
+    }
+    el.hidden = !txt;
+    if (txt) {
+      if (lb) lb.textContent = '上一手';
+      tx.textContent = txt;
+    }
+  }
+
+  // 决算倒计时：连续 20 手没有实质进展就到决算，剩 10 手以内开始提醒（2026-10-18 要的）
   var SETTLE_IDLE = 20;
   function paintSettleCd() {
     var el = $('settleCd');
@@ -193,6 +209,7 @@
 
     turnEl.textContent = turnbarText(st, turnNo);
     turnEl.className = 'turnbar ' + (st.over ? 'over' : 'turn-' + (g.escapeOwner(st) || st.turn));
+    paintTurnRep();
     paintSettleCd();
     hintEl.textContent = hintText();
     if (pendingWhaleFx) { pendingWhaleFx = false; playWhaleFx(); }
@@ -278,7 +295,7 @@
     maybeAi();
   }
   // 电脑这一手：万一算不出来（脚本没加载全 / 某个局面把评分算崩了），
-  // 不要闷声放弃回合——退一步用军师榜第一名，并把原因说给船长听。
+  // 不要闷声放弃回合——退一步用军师榜第一名，并把原因说给玩家听。
   function safeLocal() {
     try {
       var a = ai.decide(st, aiLevel);
