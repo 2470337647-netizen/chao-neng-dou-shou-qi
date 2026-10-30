@@ -5,9 +5,11 @@
 **在线玩**：
 
 - GitHub Pages（主站）：<https://2470337647-netizen.github.io/chao-neng-dou-shou-qi/>
-- VibeDrop（备用镜像）：<https://jdj8jsmd.vibedrop.site>
+- VibeDrop（备用镜像）：<https://57363tym.vibedrop.site>
 
 主站带版本历史，改版后跟着仓库走；VibeDrop 是独立的一份拷贝，互不影响。
+
+本项目现在是《船长斗兽棋》目录下的子项目：`C:\Users\24703\Desktop\船长斗兽棋\超能斗兽棋\`。老版（带鲸鲸对弈服务的那一版）在上一级目录，两套代码互不引用。
 
 ---
 
@@ -55,7 +57,7 @@
 ## 重建与自检
 
 ```powershell
-cd C:\Users\24703\Desktop\超能斗兽棋
+cd C:\Users\24703\Desktop\船长斗兽棋\超能斗兽棋
 
 node game-test.js            # 回归测试，应为 206 项全通过
 node _build/build-single.mjs # 重新打单文件
@@ -81,13 +83,14 @@ node _build\gh-deploy.mjs all # 第一次建仓 + 传文件 + 开 Pages；再跑
 ### VibeDrop（备用镜像）
 
 ```powershell
+# 当前线上：slug 57363tym  →  https://57363tym.vibedrop.site
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\24703\Desktop\chatbox\publish.ps1 `
-  "C:\Users\24703\Desktop\超能斗兽棋\超能斗兽棋.html" -Title "超能斗兽棋" -Slug "jdj8jsmd" -Visibility public
+  "C:\Users\24703\Desktop\船长斗兽棋\超能斗兽棋\超能斗兽棋.html" -Title "超能斗兽棋" -Visibility public
 ```
 
 不带 `-Slug` 会新建一个站点；带 `-Slug` 名义上是更新已有的那个。
 
-⚠️ 实测（2026-10-30）：带 `-Slug` 重新 inline 之后，地址能访问但内容还是旧版（CDN 缓存），加 `?v=xxx` 也一样。改完要真正上线，得 `-Delete <slug>` 删掉再不带 `-Slug` 新建，会拿到一个新地址。
+⚠️ 实测（2026-10-30）：带 `-Slug` 重新 inline 之后，地址能访问但内容还是旧版（CDN 缓存），加 `?v=xxx` 也一样。改完要真正上线，得先 `-Delete <旧slug>` 删掉，再不带 `-Slug` 新建，会拿到一个新地址（地址换了要同步改上面「在线玩」那行）。
 
 ---
 
