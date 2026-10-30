@@ -1,0 +1,3532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>超能斗兽棋 · 24 张手搓卡牌</title>
+<style>
+  :root {
+    --gold: #e8c46a;
+    --red: #e05a5a;
+    --blue: #5a9ae0;
+    --ink: #0e1626;
+    --panel: rgba(255, 255, 255, .06);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 18px 20px 40px;
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    color: #e9eef7;
+    background: radial-gradient(1200px 700px at 20% -10%, #1a2b4d 0%, #0b1220 55%, #070b13 100%);
+    min-height: 100vh;
+  }
+  header { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
+  h1 { margin: 0; font-size: 26px; letter-spacing: 1px; color: var(--gold); text-shadow: 0 2px 14px rgba(232, 196, 106, .25); }
+  h1 .sub { font-size: 14px; color: #8fa3c4; margin-left: 10px; letter-spacing: 2px; }
+  .tools { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 13px; color: #e9eef7; cursor: pointer;
+    background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04));
+    border: 1px solid rgba(255,255,255,.18); border-radius: 9px; padding: 7px 13px;
+    transition: .15s;
+  }
+  button:hover { border-color: var(--gold); color: #fff; transform: translateY(-1px); }
+  /* 🐋 对局服务在线时才亮起来（离线 = 默认灰） */
+  button.whaleOn { border-color: #5fd0ff; color: #bfeaff; box-shadow: 0 0 0 1px rgba(95,208,255,.25) inset; }
+  button.whaleSleep { border-color: #ffd479; color: #ffe6b0; }
+  /* 布局：棋盘 | 技能+战报 | AI 思考+战绩；窗口窄了自动折行，不留空槽 */
+  main { display: grid; grid-template-columns: auto minmax(300px, 1fr) minmax(270px, 340px); gap: 20px; align-items: start; }
+  .boardWrap { min-width: 0; }
+  .side3 { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  @media (max-width: 1240px) {
+    main { grid-template-columns: auto minmax(300px, 1fr); }
+    .side3 { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    .side3 { grid-template-columns: 1fr; }
+  }
+
+  /* 棋盘大小可调：滑杆值存在 localStorage 的 cb.zoom，刷新后记得住 */
+  .board { zoom: var(--zoom, 1); }
+  .sizer { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 12.5px; color: #9fb4d2; }
+  .sizer input[type=range] { width: 168px; accent-color: var(--gold); cursor: pointer; }
+  .sizer .zv { color: var(--gold); min-width: 44px; font-variant-numeric: tabular-nums; }
+  /* 顶栏里的电脑棋力滑杆：0（随便玩）~ 5（深算），随时可拖 */
+  .tools .aiPower { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: #9fb4d2;
+                    border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 3px 10px; }
+  .tools .aiPower input[type=range] { width: 110px; accent-color: var(--gold); cursor: pointer; }
+  .tools .aiPower .apv { color: var(--gold); min-width: 26px; text-align: right; font-variant-numeric: tabular-nums; }
+  .turnbar {
+    padding: 9px 14px; border-radius: 10px; font-size: 14px; letter-spacing: .5px;
+    background: var(--panel); border: 1px solid rgba(255,255,255,.12); margin-bottom: 10px;
+  }
+  .turnbar.turn-red { border-color: rgba(224,90,90,.6); box-shadow: 0 0 18px rgba(224,90,90,.18); }
+  .turnbar.turn-blue { border-color: rgba(90,154,224,.6); box-shadow: 0 0 18px rgba(90,154,224,.18); }
+  .turnbar.over { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 22px rgba(232,196,106,.3); }
+
+  /* 决算倒计时：连续 20 手无进展就决算，剩 10 手以内才露面 */
+  .settleCd {
+    margin: -4px 0 10px; padding: 7px 12px; border-radius: 9px; font-size: 12.5px;
+    border: 1px solid rgba(232,196,106,.45); color: #f0d79a;
+    background: rgba(232,196,106,.08); letter-spacing: .3px;
+  }
+  .settleCd.hot {
+    border-color: rgba(224,90,90,.7); color: #ffb4b4;
+    background: rgba(224,90,90,.13); box-shadow: 0 0 14px rgba(224,90,90,.18);
+  }
+  .settleCd[hidden] { display: none; }
+
+  .board {
+    display: grid; grid-template-columns: repeat(5, 96px); grid-template-rows: repeat(5, 96px);
+    gap: 7px; padding: 12px; border-radius: 16px;
+    background: linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 18px 50px rgba(0,0,0,.45), inset 0 0 60px rgba(90,154,224,.05);
+  }
+  .cell {
+    position: relative; border-radius: 12px; border: 1px solid rgba(255,255,255,.09);
+    background: rgba(255,255,255,.03); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: .12s; overflow: hidden;
+  }
+  .cell.side-red { background: rgba(224,90,90,.20); box-shadow: inset 0 0 0 1px rgba(224,90,90,.38); }
+  .cell.side-blue { background: rgba(90,154,224,.20); box-shadow: inset 0 0 0 1px rgba(90,154,224,.38); }
+  .cell.water { background: radial-gradient(circle at 50% 40%, #2f6fae 0%, #17395f 70%, #102844 100%); border-color: rgba(120,190,255,.35); }
+  .waterTag { font-size: 12px; color: #a9d4ff; letter-spacing: 2px; opacity: .75; }
+  .cell:hover { border-color: rgba(232,196,106,.5); }
+  .cell.sel { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(232,196,106,.5), 0 0 24px rgba(232,196,106,.35); }
+  .cell.movable::after, .cell.eatable::after, .cell.pickable::after, .cell.dirHint::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: 11px;
+  }
+  .cell.movable::after { box-shadow: inset 0 0 0 2px rgba(90,224,150,.75); }
+  .cell.eatable::after { box-shadow: inset 0 0 0 2px rgba(255,90,90,.85); }
+  .cell.pickable::after { box-shadow: inset 0 0 0 2px rgba(255,170,60,.85); }
+  .cell.dirHint::after { box-shadow: inset 0 0 0 2px rgba(120,190,255,.85); }
+
+  .tile {
+    width: 100%; height: 100%; border-radius: 11px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; position: relative; user-select: none;
+  }
+  .tile.back { background: repeating-linear-gradient(45deg, rgba(255,255,255,.10) 0 6px, rgba(255,255,255,.03) 6px 12px); border: 1px solid rgba(255,255,255,.22); }
+  .tile.back.owner-red { border-color: rgba(224,90,90,.75); box-shadow: inset 0 0 22px rgba(224,90,90,.28); }
+  .tile.back.owner-blue { border-color: rgba(90,154,224,.75); box-shadow: inset 0 0 22px rgba(90,154,224,.28); }
+  .tile.back .qn { font-size: 30px; color: rgba(255,255,255,.5); font-weight: 700; }
+  .tile.face { background: linear-gradient(180deg, #fdf6e6 0%, #eadfc6 100%); color: #16233a; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+  .tile.face.owner-red { border: 3px solid #e2453f; box-shadow: 0 0 0 2px rgba(226,69,63,.55), 0 4px 14px rgba(0,0,0,.4); }
+  .tile.face.owner-blue { border: 3px solid #3f8ce6; box-shadow: 0 0 0 2px rgba(63,140,230,.55), 0 4px 14px rgba(0,0,0,.4); }
+  .tile.face.owner-red .lv { background: #c8302a; color: #fff5f0; }
+  .tile.face.owner-blue .lv { background: #1f6fc4; color: #f0f7ff; }
+  .tile.face .icon { font-size: 32px; line-height: 1; }
+  .tile.face .nm { font-size: 13px; margin-top: 2px; letter-spacing: 1px; }
+  .tile.face .lv {
+    position: absolute; top: 3px; right: 5px; font-size: 11px; font-weight: 700;
+    background: #16233a; color: #fdf6e6; border-radius: 6px; padding: 0 5px;
+  }
+  .tile.face .badge { position: absolute; top: 2px; left: 4px; font-size: 13px; }
+
+  .hint { margin-top: 10px; font-size: 13px; color: #9db2d4; min-height: 34px; max-width: 520px; line-height: 1.5; }
+
+  .side { flex: 1 1 320px; min-width: 300px; display: flex; flex-direction: column; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 12px 14px; }
+  .card h3 { margin: 0 0 9px; font-size: 13px; letter-spacing: 2px; color: var(--gold); font-weight: 600; }
+  .skHead { font-size: 13px; color: #cfe0f7; margin-bottom: 7px; }
+  .skNone { font-size: 12px; color: #7f92b0; }
+  .skText { font-size: 12px; color: #9fb4d2; line-height: 1.65; margin-bottom: 9px; border-left: 2px solid #2c4b76; padding-left: 8px; }
+  .skBtn { display: block; width: 100%; text-align: left; margin-bottom: 6px; font-size: 12.5px; }
+  .log { max-height: 300px; overflow-y: auto; }
+  .log .line { font-size: 12.5px; line-height: 1.65; padding: 1px 0; border-bottom: 1px dashed rgba(255,255,255,.05); }
+  .log .think { color: #8ba3c4; font-style: italic; opacity: .9; }
+  .log .sys { color: #9db2d4; }
+  .log .bad { color: #ff9a9a; }
+  .log .t-attack, .log .t-clash, .log .t-death, .log .t-over { color: #ffb45e; }
+  .log .t-thaw, .log .t-freeze, .log .t-immune { color: #79d0ff; }
+  .log .t-escape, .log .t-meteor, .log .t-blast, .log .t-shock { color: #ff8fd0; }
+  .log .t-push, .log .t-scratch { color: #b0c4dd; }
+  .log .t-whale { color: #7fe3ff; font-weight: 700; }
+  .log .t-evolve { color: #8affd6; font-weight: 700; }
+  .log .t-kunwave { color: #6fe0ff; font-weight: 700; }
+  .log .t-grow, .log .t-learn { color: #ffd479; }
+  @keyframes whaleSlam {
+    0%   { background: rgba(90, 200, 255, .80); box-shadow: 0 0 0 0 rgba(90, 200, 255, .95); }
+    100% { background: transparent;              box-shadow: 0 0 0 24px rgba(90, 200, 255, 0); }
+  }
+  .cell.whaleHit { animation: whaleSlam .95s ease-out; }
+  @keyframes whaleShake {
+    0%, 100% { transform: translate(0, 0); }
+    25%      { transform: translate(-4px, 3px); }
+    50%      { transform: translate(4px, -3px); }
+    75%      { transform: translate(-2px, -2px); }
+  }
+  .board.whaleBoard { animation: whaleShake .45s ease-out; }
+  .board { position: relative; }
+  .whaleEmoji {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font-size: 64px; pointer-events: none; z-index: 30;
+    animation: whalePop 1.3s ease-out forwards;
+  }
+  @keyframes whalePop {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(.4); }
+    25%  { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.7); }
+  }
+  .turnbar.whaleNow { background: linear-gradient(90deg, #0b3f66, #1c7fc4); color: #eaf7ff; }
+
+  .modal { position: fixed; inset: 0; background: rgba(4, 8, 15, .78); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 20; }
+  .modal.show { display: flex; }
+  .modalBox {
+    max-width: 760px; max-height: 86vh; overflow-y: auto; padding: 26px 30px; border-radius: 18px;
+    background: linear-gradient(180deg, #131e33, #0b1220); border: 1px solid rgba(232,196,106,.35);
+    box-shadow: 0 30px 90px rgba(0,0,0,.6);
+  }
+  .modalBox h2 { margin-top: 0; color: var(--gold); font-size: 19px; letter-spacing: 1px; }
+  .modalBox h4 { color: #cfe0f7; margin: 18px 0 6px; font-size: 14px; letter-spacing: 1px; }
+  .modalBox p, .modalBox li { font-size: 13.5px; line-height: 1.75; color: #cfdcef; }
+  .modalBox ul { padding-left: 20px; margin: 6px 0; }
+  .modalBox table { border-collapse: collapse; margin: 8px 0; font-size: 13px; width: 100%; }
+  .modalBox th, .modalBox td { border: 1px solid rgba(255,255,255,.14); padding: 5px 9px; text-align: left; }
+  .modalBox th { background: rgba(255,255,255,.06); color: var(--gold); font-weight: 600; }
+  .modalBox .closeRow { text-align: right; margin-top: 18px; }
+
+  /* 复盘条 · AI 思考 · 战绩 · 规则书（从 规则书.md 现读）*/
+  .replayBar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px;
+    padding: 8px 11px; border-radius: 10px; font-size: 12.5px; color: #cfe0f7;
+    background: var(--panel); border: 1px solid rgba(232,196,106,.42); }
+  .replayBar .rstep { color: var(--gold); font-variant-numeric: tabular-nums; }
+  .replayBar .rlabel { color: #9db2d4; }
+  .candRow { display: flex; gap: 8px; font-size: 12.5px; line-height: 1.5; padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,.06); }
+  .candRow .cs { min-width: 34px; text-align: right; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .candRow .ct { flex: 1; }
+  .candRow .co { color: #9db2d4; }
+  .candRow.top { background: rgba(232,196,106,.10); border-radius: 8px; }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre; color: #cfe0f7; overflow-x: auto; }
+  .statGrid { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 12.5px; color: #cfe0f7; }
+  .statGrid .k { color: #9db2d4; }
+  .statGrid .v { color: var(--gold); font-variant-numeric: tabular-nums; }
+  .statLine { font-size: 12px; color: #9db2d4; padding: 3px 0 0; margin-top: 4px; border-top: 1px dashed rgba(255,255,255,.06); }
+  .reviewText { font-size: 12.5px; line-height: 1.65; color: #dbe8fb; margin-top: 6px; }
+  #btnReview { margin-top: 8px; }
+  .talkRow { display: flex; gap: 6px; margin-top: 8px; }
+  .talkRow input { flex: 1; min-width: 0; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.16);
+    border-radius: 8px; color: #e8f0ff; font-size: 12.5px; padding: 6px 9px; outline: none; }
+  .talkRow input:focus { border-color: var(--gold); }
+  .talkRow button { flex: none; }
+  #log .me { color: #ffd7a1; }
+  #usage { margin-top: 8px; padding-top: 7px; border-top: 1px dashed rgba(255,255,255,.12);
+    font-size: 12px; color: #9fb6d6; line-height: 1.7; }
+  #usage b { color: var(--gold); }
+  /* 接口弹窗与新增面板 */
+  .hintList { display: flex; flex-direction: column; gap: 5px; margin: 7px 0 2px; }
+  .hintItem { font-size: 12.5px; color: #cfe0f7; display: flex; align-items: flex-start; gap: 6px; cursor: pointer; }
+  .hintItem input { accent-color: var(--gold); margin-top: 2px; }
+  #thinkLen { width: 100%; accent-color: var(--gold); margin: 6px 0 2px; }
+  #log .think { white-space: pre-wrap; }
+  .thinkList { max-height: 300px; overflow-y: auto; }
+  .thinkItem { border-top: 1px dashed rgba(255,255,255,.12); padding: 6px 0 8px; }
+  .thinkItem:first-child { border-top: 0; }
+  .thinkHead { font-size: 12px; color: var(--gold); margin-bottom: 3px; }
+  .thinkBody { font-size: 12.5px; color: #cfe0f7; white-space: pre-wrap; line-height: 1.55; }
+  .thinkSay { font-size: 12.5px; color: #9fd8ff; margin-top: 4px; }
+  details.advWrap { margin-top: 10px; }
+  details.advWrap > summary { cursor: pointer; font-size: 12.5px; color: #9fd8ff; padding: 4px 0; }
+  details.advWrap[open] > summary { color: var(--gold); }
+  /* 战报里「军师的话」折叠块：默认收起，点一下展开 */
+  #log details.adv { display: inline-block; margin-left: 6px; font-size: 12px; color: #8fa6c4; }
+  #log details.adv summary { cursor: pointer; color: var(--gold); list-style: none; display: inline-block;
+                             border-bottom: 1px dotted rgba(226,183,89,.55); }
+  #log details.adv summary::-webkit-details-marker { display: none; }
+  #log details.adv summary::before { content: '▸ '; }
+  #log details.adv[open] summary::before { content: '▾ '; }
+  .mdBody h2 { color: var(--gold); font-size: 19px; margin: 6px 0 10px; }
+  .mdBody h3 { color: var(--gold); font-size: 15px; letter-spacing: 1px; margin: 18px 0 6px; }
+  .mdBody h4 { color: #cfe0f7; font-size: 14px; margin: 14px 0 6px; }
+  .mdBody p, .mdBody li { font-size: 13.5px; line-height: 1.75; color: #cfdcef; }
+  .mdBody ul, .mdBody ol { padding-left: 20px; margin: 6px 0; }
+  .mdBody code { background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 5px; font-size: 12.5px; }
+  .mdBody table { border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+  .mdBody th, .mdBody td { border: 1px solid rgba(255,255,255,.14); padding: 5px 9px; text-align: left; }
+  .mdBody th { background: rgba(255,255,255,.06); color: var(--gold); }
+  .mdBody hr { border: none; border-top: 1px solid rgba(255,255,255,.12); margin: 14px 0; }
+  .mdBody strong { color: #ffe9b8; }
+</style>
+</head>
+<body>
+<style>
+  /* 新增面板与接口弹窗的样式（原样式表之上的一小层） */
+  .modalBox .closeRow button + button { margin-left: 8px; }
+  /* 按钮多了，窄窗口就让它们折行，别把最后一个按钮裁到屏幕外 */
+  header .tools { flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; }
+  .thinkList { max-height: 380px; overflow: auto; }
+  .thinkItem { border-top: 1px solid rgba(255,255,255,.08); padding: 7px 0; }
+  .thinkItem:first-child { border-top: none; }
+  .thinkHead { color: var(--gold); font-size: 12px; }
+  .thinkBody { white-space: pre-wrap; font-size: 13px; line-height: 1.6; color: #cfd8e8; margin-top: 4px; }
+  .thinkSay { font-size: 12px; color: #8fb6e8; margin-top: 4px; }
+  .statGrid { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; font-size: 13px; }
+  .statGrid .k { color: #9fb0c8; }
+  .statGrid .v { text-align: right; color: #fff; font-variant-numeric: tabular-nums; }
+  .statLine { font-size: 12px; color: #93a4bd; margin-top: 5px; line-height: 1.55; }
+  .reviewText { font-size: 13px; line-height: 1.75; color: #dbe4f2; white-space: pre-wrap; margin-top: 7px; }
+  .candRow { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 4px 0; border-top: 1px solid rgba(255,255,255,.07); }
+  .candRow.top .ct { color: var(--gold); }
+  .candRow .cs { min-width: 40px; text-align: right; color: #7f93ad; font-variant-numeric: tabular-nums; }
+  .candRow .ct { flex: 1; color: #dbe4f2; }
+  .candRow .co { color: #8fb6e8; font-size: 12px; }
+  .cfgTip { font-size: 12px; color: #93a4bd; line-height: 1.7; margin: 0 0 10px; }
+  .cfgRow { display: flex; gap: 10px; align-items: center; margin: 9px 0; }
+  .cfgRow > label { width: 92px; flex: none; color: #9fb0c8; font-size: 13px; }
+  .cfgRow input[type=text], .cfgRow input[type=password] {
+    flex: 1; background: #0d1726; border: 1px solid rgba(255,255,255,.18); color: #e8eef8;
+    border-radius: 6px; padding: 7px 9px; font: inherit; font-size: 13px; min-width: 0;
+  }
+  .cfgChk { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #cfd8e8; margin: 7px 0; }
+  #cfgMsg { font-size: 12px; color: var(--gold); min-height: 20px; line-height: 1.5; }
+  .modalBox.narrow { max-width: 640px; }
+</style>
+<header>
+  <h1>超能斗兽棋<span class="sub">24 张手搓卡牌 · 5×5 暗牌棋</span></h1>
+  <div class="tools">
+    <button id="btnNew">新的一局</button>
+    <button id="btnAi">对手：本地 AI</button>
+    <span class="aiPower" title="1 = 随意（乱走，看着乐）· 2 = 细心（会躲危险、掀牌探路）· 3 = 老深算（满搜索，往前看一手）· 4 = 新深算（往前多看一层，最慢最强）">
+      <span>电脑棋力</span>
+      <input type="range" id="aiPower" min="1" max="4" step="1" value="3">
+      <b class="apv" id="aiPowerVal">3</b>
+    </span>
+    <button id="btnGiant">天降：开</button>
+    <button id="btnUndo">悔棋</button>
+    <button id="btnReplay">复盘</button>
+    <button id="btnCands">候选表</button>
+    <button id="btnSkip">跳过</button>
+    <button id="btnRules">规则书</button>
+    <button id="btnAiCfg" title="接你自己的 OpenAI 兼容接口，让它替你执蓝">⚙ 接口</button>
+  </div>
+</header>
+
+<main>
+  <section class="boardWrap">
+    <div class="sizer">
+      <span>棋盘大小</span>
+      <input type="range" id="zoom" min="55" max="160" step="5" value="100">
+      <span class="zv" id="zoomVal">100%</span>
+    </div>
+    <div class="turnbar turn-red" id="turnbar">准备开局</div>
+    <div class="settleCd" id="settleCd" hidden></div>
+    <div class="board" id="board"></div>
+    <div class="hint" id="hint"></div>
+    <div class="replayBar" id="replayBar" style="display:none">
+      <button id="btnPrev">◀ 上一手</button>
+      <span class="rstep" id="replayStep">第 0 / 0 手</span>
+      <button id="btnNext">下一手 ▶</button>
+      <button id="btnLive">回到最新</button>
+      <span class="rlabel" id="replayLabel"></span>
+    </div>
+  </section>
+  <aside class="side">
+    <div class="card">
+      <h3>技能</h3>
+      <div id="skills"></div>
+    </div>
+    <div class="card log">
+      <h3>战报</h3>
+      <div id="log"></div>
+    </div>
+  </aside>
+  <aside class="side3">
+    <div class="card">
+      <h3>AI 的思考</h3>
+      <div id="aiThink" class="skNone">对手还没开始想棋。用「本地 AI」时它不写长想法；切成「对手：我的 AI」并填好接口，每一手的盘算都会记在这儿。</div>
+      <details class="advWrap">
+        <summary>▸ 引擎的候选表（评分 · 点开才看）</summary>
+        <div id="cands" class="skNone">点顶栏「候选表」（或展开这里）——本地引擎当场把当前局面算一遍，候选招、评分、战果都列在这儿（不联网、不调接口）。</div>
+      </details>
+    </div>
+    <div class="card">
+      <h3>战绩</h3>
+      <div id="stats" class="skNone">打完一局自动记在这台浏览器里（不联网、不上传）。</div>
+      <button id="btnReview">复盘点评最近一局</button>
+      <div id="reviewBox"></div>
+    </div>
+  </aside>
+</main>
+
+<div class="modal" id="rules">
+  <div class="modalBox">
+    <h2>规则书</h2>
+    <div id="rulesLive" class="mdBody"></div>
+    <div id="rulesStatic" class="mdBody"></div>
+    <div class="closeRow"><button id="rulesClose">知道了，开打</button></div>
+  </div>
+</div>
+
+<div class="modal" id="aiCfg">
+  <div class="modalBox narrow">
+    <h2>接上你自己的 AI</h2>
+    <p class="cfgTip">填一个 <b>OpenAI 兼容接口</b>（DeepSeek、OpenRouter、硅基流动、自建服务都行），点「对手：我的 AI」之后，蓝方就由它来下。
+      Key 只存在你这台浏览器的 localStorage 里——本站没有服务器，也收不到它；刷新或换浏览器就得重填。
+      <b>不填也完全能玩</b>：蓝方由本地引擎执，离线也行。</p>
+    <div class="cfgRow"><label for="cfgBase">Base URL</label>
+      <input type="text" id="cfgBase" placeholder="https://api.deepseek.com" autocomplete="off" spellcheck="false"></div>
+    <div class="cfgRow"><label for="cfgModel">模型</label>
+      <input type="text" id="cfgModel" placeholder="deepseek-chat" autocomplete="off" spellcheck="false"></div>
+    <div class="cfgRow"><label for="cfgKey">API Key</label>
+      <input type="password" id="cfgKey" placeholder="sk-..." autocomplete="off" spellcheck="false"></div>
+    <label class="cfgChk"><input type="checkbox" id="cfgUseMove" checked> 对局中让它替我执蓝（每手会真的调用接口，按你的账单算）</label>
+    <label class="cfgChk"><input type="checkbox" id="cfgUseReview" checked> 允许它写复盘点评</label>
+    <div id="cfgMsg"></div>
+    <div class="closeRow">
+      <button id="cfgTest">测一下</button>
+      <button id="cfgSave">保存</button>
+      <button id="cfgClose">关闭</button>
+    </div>
+    <p class="cfgTip" style="margin-top:10px">接口要允许<b>浏览器直连</b>（CORS）：DeepSeek、OpenRouter、硅基流动实测都允许；自建服务记得放开跨域。
+      失败了也不影响下棋——写明原因后，这一手自动退回本地引擎。</p>
+  </div>
+</div>
+
+<script>
+/* =============================================================================
+ * 超能斗兽棋 —— 纯逻辑引擎（无 UI、无依赖、可在 node 里跑）
+ * 设计：船长（初中纸片自制游戏）规则复现 + 空白处裁定补全
+ * 用法：浏览器 <script src="game-core.js"> 得到 window.CaptainBeast
+ *       node   require('./game-core.js')  得到 module.exports
+ * ========================================================================== */
+(function (root) {
+  'use strict';
+
+  var N = 5;                       // 棋盘 5x5
+  var WATER = 12;                  // 中央格（行2列2，0-based）＝深水区
+
+  // ---- 等级表（吃子用「攻击方等级 >= 目标等级 即可吃」）---------------------
+  var LEVEL = {
+    mouse: 1, cat: 2, dog: 3, wolf: 4, leopard: 5, tiger: 6, lion: 7, elephant: 8,
+    penguin: 3, panda: 3.5, roc: 6, dino: 7.5,
+    kun: 7                         // 特殊变种：鹏鸟吞下敌方企鹅后化身，不进开局卡池
+  };
+  var NAME = {
+    mouse: '鼠', cat: '猫', dog: '狗', wolf: '狼', leopard: '豹', tiger: '虎',
+    lion: '狮', elephant: '象', penguin: '企鹅', panda: '熊猫', roc: '鹏鸟', dino: '恐龙',
+    kun: '鲲'
+  };
+  var ICON = {
+    mouse: '🐭', cat: '🐱', dog: '🐶', wolf: '🐺', leopard: '🐆', tiger: '🐯',
+    lion: '🦁', elephant: '🐘', penguin: '🐧', panda: '🐼', roc: '🦅', dino: '🦖',
+    kun: '🐳'
+  };
+  var ROSTER = ['mouse', 'cat', 'dog', 'wolf', 'leopard', 'tiger', 'lion', 'elephant',
+                'penguin', 'panda', 'roc', 'dino'];
+  var SIMPLE = { mouse: true, cat: true, dog: true, wolf: true, leopard: true,
+                 tiger: true, lion: true, elephant: true };       // 经典八级
+
+  var SKILL_TEXT = {
+    mouse: '逃出生天：被吃掉时不算真死，立即免费行动一次，只能落到空白格。每局一次，不占回合。',
+    cat: '侧击：上下左右之外还能斜着行动与吃子（一共 8 个方向）。',
+    dog: '疾行：一次可以走两格（可吃第二格目标）。',
+    wolf: '连吃：吃掉一个后，检查四周四格是否还有可吃的已公开目标，可由你选择是否继续连吃。不占回合。',
+    leopard: '自爆：自身为中心 3×3 内所有已公开单位受到 5.5 伤害，自身阵亡。占回合，每局一次。',
+    tiger: '猛扑：对相邻已公开目标发动一次威力 7 的攻击。每局一次，占回合。也可以猛扑冰封中的恐龙（不分敌我），等于隔空帮它敲掉一层冰。',
+    lion: '狮王矢：远程发射一枚威力 7 的箭，沿一条直线只命中第一个挡路的单位——是已公开的敌方就挨箭；暗牌或自己人会把箭挡下来（谁都不掉血）。唯一例外：挡路的是冰封中的恐龙，这一箭敲掉它一层冰。每局一次，占回合。',
+    elephant: '巨力：可以翻越紧邻的一格障碍（翻越后落在障碍后方的格子）。',
+    penguin: '冰封：指定一个已公开敌方单位，令其下一回合被禁锢（效果公开可见）。每局一次，不占回合。',
+    panda: '成长·吃啥补啥：每吃掉一个动物，等级 +1，并永久获得它「被动、能反复用」的能力（吃猫得侧击、吃狗得疾行、吃狼得连吃、吃象得巨力、吃鹏鸟得翱翔）。最高 8.5 级，吃子规则与他人相同。一次性的招数学不到：豹的自爆、虎的猛扑、狮王矢、企鹅的冰封，以及恐龙的冲击波/陨石——吃了只涨等级。',
+    roc: '翱翔：可以飞往任意空位，无视障碍，但飞行落点必须是空格，不能直接吃掉目标。',
+    dino: '冰封之躯：初次翻开时处于冰冻状态（期间无敌），需两次「等级≥7 的攻击或威力≥7 的技能」才能解冻，解冻那一下不结算伤害。冲击波：选一个方向，该方向所有单位受到 6.5 伤害并击退。陨石降临：自爆并对周围 3×3 造成 8.5 伤害——威力大到连冰层带恐龙一起砸碎。两技能各一次，均占回合。',
+    kun: '鲲：鹏鸟吞下敌方企鹅后化而为鲲——等级 7。失去翱翔（不能再飞），但能进中央深水区（水里的它只有同为水中单位才咬得到）。十字波涛：以自身为中心，上下左右四条臂各自一路穿到棋盘边缘，臂上每个单位受 6.5 伤害；扛得住的已公开目标和暗牌都会被沿各自方向击退（机制同恐龙冲击波）。每局一次，占回合。'
+  };
+
+  // 每个技能要什么参数：'unit' = 指定一个目标格；'dir' = 指定一个方向；null = 不需要参数
+  // UI / AI 都照这张表生成动作，别再各写一份映射（两边漂移过一次）
+  var SKILL_NEED = { blast: null, pounce: 'unit', volley: 'dir', freeze: 'unit', shock: 'dir', meteor: null, kunwave: null };
+  function skillNeed(id) { return SKILL_NEED[id] === undefined ? null : SKILL_NEED[id]; }
+
+  // ---- 基础工具 -------------------------------------------------------------
+  function idx(r, c) { return r * N + c; }
+  function rc(i) { return { r: Math.floor(i / N), c: i % N }; }
+  function inBoard(r, c) { return r >= 0 && r < N && c >= 0 && c < N; }
+  function other(p) { return p === 'red' ? 'blue' : 'red'; }
+
+  // 可复现的伪随机（种下同一个种子就能重摆同一局）
+  var rng = (function () {
+    var s = (Math.random() * 0xffffffff) >>> 0;
+    return {
+      setSeed: function (n) { s = (n >>> 0) || 1; },
+      getSeed: function () { return s; },
+      next: function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; },
+      shuffle: function (arr) {
+        for (var i = arr.length - 1; i > 0; i--) {
+          var j = Math.floor(this.next() * (i + 1)), t = arr[i];
+          arr[i] = arr[j]; arr[j] = t;
+        }
+        return arr;
+      }
+    };
+  })();
+
+  var DIR8 = [
+    { dr: -1, dc: 0, name: '上' }, { dr: 1, dc: 0, name: '下' },
+    { dr: 0, dc: -1, name: '左' }, { dr: 0, dc: 1, name: '右' }
+  ];
+  var DIR4 = DIR8.concat([
+    { dr: -1, dc: -1, name: '左上' }, { dr: -1, dc: 1, name: '右上' },
+    { dr: 1, dc: -1, name: '左下' }, { dr: 1, dc: 1, name: '右下' }
+  ]);
+
+  function clone(st) {
+    var b = new Array(N * N);
+    for (var i = 0; i < N * N; i++) {
+      var u = st.board[i];
+      if (!u) { b[i] = null; continue; }
+      var copy = {
+        id: u.id, kind: u.kind, level: u.level, owner: u.owner, cell: u.cell,
+        revealed: u.revealed, frozen: u.frozen, frozenHits: u.frozenHits,
+        jailed: u.jailed, moves: u.moves,
+        used: {
+          escape: !!u.used.escape, blast: !!u.used.blast, pounce: !!u.used.pounce,
+          volley: !!u.used.volley, freeze: !!u.used.freeze,
+          shock: !!u.used.shock, meteor: !!u.used.meteor,
+          kunwave: !!u.used.kunwave
+        }
+      };
+      // 熊猫「吃啥补啥」学到的能力（hasCat / hasDog / …）必须跟着复制
+      for (var k in u) {
+        if (!Object.prototype.hasOwnProperty.call(u, k)) continue;
+        if (k === 'used') continue;
+        if (copy[k] === undefined) copy[k] = u[k];
+      }
+      b[i] = copy;
+    }
+    var out = {
+      board: b, turn: st.turn, ply: st.ply, history: st.history.slice(),
+      pending: st.pending ? JSON.parse(JSON.stringify(st.pending)) : null,
+      escaped: null, idle: st.idle || 0,
+      over: st.over, result: st.result, whale: st.whale,
+      // 规则开关（自对弈对照组用）：null/undefined 视为全开，正式对局不受影响
+      flags: st.flags ? { kun: st.flags.kun !== false, panda: st.flags.panda !== false, thaw: st.flags.thaw !== false } : null
+    };
+    // 正在逃生的鼠不在棋盘上，必须单独搬过去
+    if (st.escaped && st.escaped.unit) {
+      var eu = st.escaped.unit, ec = {
+        id: eu.id, kind: eu.kind, level: eu.level, owner: eu.owner, cell: eu.cell,
+        revealed: eu.revealed, frozen: eu.frozen, frozenHits: eu.frozenHits,
+        jailed: eu.jailed, moves: eu.moves,
+        used: {
+          escape: !!eu.used.escape, blast: !!eu.used.blast, pounce: !!eu.used.pounce,
+          volley: !!eu.used.volley, freeze: !!eu.used.freeze,
+          shock: !!eu.used.shock, meteor: !!eu.used.meteor,
+          kunwave: !!eu.used.kunwave
+        }
+      };
+      out.escaped = { cell: st.escaped.cell, unit: ec };
+    }
+    return out;
+  }
+
+  // ---- 开局格（除中央深水格以外的 24 格，红蓝随机混放）-----------------------
+  var CELLS = (function () {
+    var list = [];
+    for (var r = 0; r < N; r++) {
+      for (var c = 0; c < N; c++) {
+        if (idx(r, c) === WATER) continue;
+        list.push([r, c]);
+      }
+    }
+    if (list.length !== 24) throw new Error('开局格数错误');
+    return list;
+  })();
+
+  // ---- 初始棋盘 -------------------------------------------------------------
+  // 24 张牌铺满除中央深水格以外的 24 格：红蓝各 12 张，合并后随机洗牌，
+  // 格子也随机洗牌 —— 阵营与位置都完全随机，背面看不出任何区别。
+  function newGame(opts) {
+    var st = { board: new Array(N * N).fill(null), turn: 'red', ply: 1, history: [],
+               pending: null, escaped: null, idle: 0, over: false, result: null,
+               // 记下这一局的种子：外面 setSeed(st.seed) 之后再 newGame() 就能原样重摆同一局
+               seed: rng.getSeed(),
+               whale: !(opts && opts.whale === false),
+               // 规则开关：只给自对弈做对照实验用（noKun / noPanda 关掉变身或熊猫成长）
+               flags: { kun: !(opts && opts.noKun), panda: !(opts && opts.noPanda), thaw: !(opts && opts.noThaw) } };
+    function put(kind, owner, r, c) {
+      st.board[idx(r, c)] = {
+        id: owner + '-' + kind, kind: kind, level: LEVEL[kind], owner: owner,
+        cell: idx(r, c), revealed: false, frozen: false, frozenHits: 0, jailed: 0,
+        used: { escape: false, blast: false, pounce: false, volley: false, freeze: false, shock: false, meteor: false, kunwave: false },
+        moves: 0
+      };
+    }
+    var pool = ['elephant', 'lion', 'tiger', 'leopard', 'roc', 'wolf',
+                'dog', 'panda', 'penguin', 'cat', 'mouse', 'dino'];
+    var cards = [];
+    rng.shuffle(pool.slice()).forEach(function (k) { cards.push({ kind: k, owner: 'red' }); });
+    rng.shuffle(pool.slice()).forEach(function (k) { cards.push({ kind: k, owner: 'blue' }); });
+    rng.shuffle(cards);
+    var cells = rng.shuffle(CELLS.slice());
+    for (var i = 0; i < 24; i++) put(cards[i].kind, cards[i].owner, cells[i][0], cells[i][1]);
+    return st;
+  }
+
+  // ---- 判定辅助 -------------------------------------------------------------
+  function isWater(i) { return i === WATER; }
+  function isSwimmer(u) { return u.kind === 'mouse' || u.kind === 'penguin' || u.kind === 'kun'; }
+  // 深水是泳者的地盘：岸上的动物不但不能停进去，连「吃掉水里的它、顺势占位」也不行。
+  // （2026-10-16 压测抓到：大象吃掉水里的企鹅后会站进深水，破坏「深水只有泳者」的铁律）
+  function canStand(u, i) { return !(isWater(i) && !isSwimmer(u)); }
+  function canEat(atk, def) {                       // 「等级 >= 对方即可吃」
+    if (atk.kind === 'mouse' && def.kind === 'elephant') return true;
+    if (atk.kind === 'elephant' && def.kind === 'mouse') return false;
+    return atk.level >= def.level;
+  }
+  function isOpen(u) { return !!u && u.revealed; }
+  function sameSide(a, b) { return a.owner === b.owner; }
+  // 平衡实验开关：st.flags.thaw === false 时冰封恐龙不可破（默认开启，正式对局不受影响）
+  function crackAllowed(st) { return !(st.flags && st.flags.thaw === false); }
+
+  // 「逃出生天」的落点决定权归鼠的主人：哪怕是对手回合吃掉它，也由它自己的主人来点落点。
+  // 这里有个陷阱——吃鼠那一方的回合此时还没走完（st.turn 仍是吃子方），
+  // 所以判定「这一手该谁动」一律用下面的 actorOf()，不要只看 st.turn。
+  function escapeOwner(st) {
+    if (st.pending && st.pending.kind === 'escape' && st.escaped && st.escaped.unit) {
+      return st.escaped.unit.owner;
+    }
+    return null;
+  }
+
+  // 当前该谁操作：鼠正在逃生命中归鼠主人，其余时候归当前回合方
+  function actorOf(st) {
+    return escapeOwner(st) || st.turn;
+  }
+
+  // 「活着」= 还能动的兵力。冰封中的恐龙是中立困兽，不替任何一方算数（船长 2026-10-17 裁定）
+  function alive(st, owner) {
+    var n = 0;
+    for (var i = 0; i < st.board.length; i++) {
+      var u = st.board[i];
+      if (u && u.owner === owner && !(u.kind === 'dino' && u.frozen)) n++;
+    }
+    return n;
+  }
+
+  // 结算：把一个单位从棋盘上移除；fromEat=true 表示「被吃掉」（鼠可以走逃出生天）
+  function kill(st, cell, killerCell, events, fromEat) {
+    var u = st.board[cell];
+    if (!u) return;
+    if (fromEat === true && u.kind === 'mouse' && !u.used.escape) {
+      u.used.escape = true;
+      u.revealed = true;
+      u.jailed = 0;
+      st.board[cell] = null;
+      st.escaped = { cell: cell, unit: u };          // 挂在棋盘外，等待选落点
+      st.pending = { kind: 'escape', unitCell: cell, unitId: u.id };
+      events.push({ t: 'escape-ready', cell: cell, text: '鼠挣脱了！立刻可以窜到任意空白格（不占回合）' });
+      return;
+    }
+    st.board[cell] = null;
+    events.push({ t: 'death', cell: cell, text: (u.owner === 'red' ? '红' : '蓝') + NAME[u.kind] + ' 阵亡' });
+  }
+
+  // ---- 冷却/回合推进 --------------------------------------------------------
+  function beginTurn(st, events) {
+    var p = st.turn;
+    for (var i = 0; i < st.board.length; i++) {
+      var u = st.board[i];
+      if (u && u.owner === p) {
+        u.moves = 1;
+        if (u.jailed > 0) {
+          u.jailed--;
+          events.push({ t: 'jail', cell: i, text: NAME[u.kind] + ' 被冰封，本回合无法行动' });
+        }
+      }
+    }
+  }
+
+  function endTurn(st, events) {
+    st.turn = other(st.turn);
+    st.ply++;
+    // 深海巨兽天降：从第 10 回合开始，之后每 10 回合一次
+    if (st.whale !== false && st.ply % 10 === 0) {
+      whaleStrike(st, events);
+      checkOver(st, events);
+    }
+    return beginTurn(st, events);
+  }
+
+  // ---- 深海巨兽天降 ---------------------------------------------------------
+  var WHALE_CELLS = [WATER, idx(1, 2), idx(3, 2), idx(2, 1), idx(2, 3)];   // 中央 + 上下左右
+
+  // 距离下一次天降还有几次行动（10 = 刚拍完，下一掌要等满 10 回合）
+  function pliesToWhale(st) {
+    if (st.whale === false) return -1;
+    return 10 - (st.ply % 10);
+  }
+
+  function whaleStrike(st, events) {
+    events.push({ t: 'whale', text: '深海巨兽从海底浮上来，一巴掌把中央拍平了！（9 级 · 中央十字）' });
+    for (var i = 0; i < WHALE_CELLS.length; i++) {
+      var cell = WHALE_CELLS[i], u = st.board[cell];
+      if (!u) continue;
+      if (!u.revealed) { whaleBlowAway(st, cell, events); continue; }
+      // 冰封中的恐龙：解冻本来就够折腾了，这一掌只算击退，不当场打死
+      if (u.kind === 'dino' && u.frozen) { whaleBlowAway(st, cell, events); continue; }
+      kill(st, cell, -1, events, false);             // 9 级高于全场最高（熊猫顶格 8.5）→ 必杀
+    }
+  }
+
+  // 暗牌不吃伤害，被拍飞出打击范围：从中央朝外的方向推出去
+  function whaleBlowAway(st, cell, events) {
+    var dirs = [], k;
+    if (cell === WATER) { for (k = 0; k < DIR8.length; k++) dirs.push(DIR8[k]); }
+    else {
+      var q = rc(cell), w = rc(WATER);
+      for (k = 0; k < DIR8.length; k++) if (DIR8[k].dr === q.r - w.r && DIR8[k].dc === q.c - w.c) dirs.push(DIR8[k]);
+    }
+    for (k = 0; k < dirs.length; k++) {
+      if (!st.board[cell]) return;
+      pushUnit(st, cell, dirs[k], events);
+      if (!st.board[cell]) return;                   // 推走了就收工
+    }
+    events.push({ t: 'immune', cell: cell, text: '暗牌被拍得动弹不得（退无可退）' });
+  }
+
+  // ---- 可行动作枚举 ---------------------------------------------------------
+  function moveTargets(st, cell) {
+    var u = st.board[cell];
+    if (!u || !u.revealed || u.jailed > 0) return [];
+    if (u.kind === 'dino' && u.frozen) return [];
+    var out = [];
+    // 己方等级≥7 的动物可以敲自家冰冻的恐龙，帮它解冻（一次一层，占回合；船长 2026 裁定）
+    if (u.level >= 7 && crackAllowed(st)) {
+      for (var d1 = 0; d1 < 4; d1++) {
+        var r1 = rc(cell).r + DIR8[d1].dr, c1 = rc(cell).c + DIR8[d1].dc;
+        if (!inBoard(r1, c1)) continue;
+        var i1 = idx(r1, c1), t1 = st.board[i1];
+        if (t1 && t1.owner === u.owner && t1.kind === 'dino' && t1.frozen) out.push({ to: i1, kind: 'thaw' });
+      }
+    }
+    var dirs = (u.kind === 'cat' || (u.kind === 'panda' && u.hasCat)) ? DIR4 : DIR8.slice(0, 4);
+    var reach = (u.kind === 'dog' || (u.kind === 'panda' && u.hasDog)) ? 2 : 1;
+    var hops = (u.kind === 'elephant' || (u.kind === 'panda' && u.hasElephant)) ? 1 : 0;  // 象可以翻越一格障碍
+    for (var d = 0; d < dirs.length; d++) {
+      var dr = dirs[d].dr, dc = dirs[d].dc;
+      var r = rc(cell).r + dr, c = rc(cell).c + dc;
+      var steps = 0, jumped = false;
+      while (inBoard(r, c) && steps < reach) {
+        var i2 = idx(r, c);
+        var t = st.board[i2];
+        if (!t) {
+          if (jumped) {
+            if (!(isWater(i2) && !isSwimmer(u))) out.push({ to: i2, kind: 'move' });
+          } else {
+            // 空格就是空格：绝不因为「后面还有空格」而凭空翻越（象只翻障碍）
+            if (!(isWater(i2) && !isSwimmer(u))) out.push({ to: i2, kind: 'move' });
+          }
+        } else if (t.owner !== u.owner && t.revealed && canEat(u, t) && canStand(u, i2)) {
+          out.push({ to: i2, kind: (t.kind === 'dino' && t.frozen) ? 'thaw' : 'eat' });
+          break;
+        } else if (t.owner !== u.owner && t.revealed && hops > 0 && !jumped) {
+          var r4 = r + dr, c4 = c + dc;
+          if (inBoard(r4, c4) && !st.board[idx(r4, c4)] && !(isWater(idx(r4, c4)) && !isSwimmer(u))) {
+            out.push({ to: idx(r4, c4), kind: 'hop', over: i2 });   // 翻过吃不动的敌人
+          }
+          break;
+        } else if (hops > 0 && !jumped) {
+          // 紧邻的是障碍（己方或暗牌，或吃不动的敌人）：翻过去吃后面的，或落在后面的空格
+          var r3 = r + dr, c3 = c + dc;
+          if (inBoard(r3, c3)) {
+            var i3 = idx(r3, c3), t3 = st.board[i3];
+            if (t3 && t3.owner !== u.owner && t3.revealed && canEat(u, t3) && canStand(u, i3)) {
+              out.push({ to: i3, kind: (t3.kind === 'dino' && t3.frozen) ? 'thaw' : 'eat', over: i2 });          // 翻越障碍后吃
+              break;
+            }
+            if (!t3 && !(isWater(i3) && !isSwimmer(u))) {
+              out.push({ to: i3, kind: 'hop', over: i2 });          // 翻越障碍落空位
+              jumped = true;
+              r += dr; c += dc;
+              steps++;
+              continue;
+            }
+          }
+          break;
+        } else {
+          break;
+        }
+        steps++; r += dr; c += dc;
+      }
+    }
+    // 翱翔＝「多一种走法」，不是「换一种走法」的心智（船长 2026-10-18 裁定）。
+    // 追加在通用循环之后：贴着走得到的格子仍记作普通移动，只有够不着的远方才标成 fly。
+    // 鹏鸟本身没有侧击/疾行/巨力，走通用循环与旧分支完全等价（四方向一格 + 贴身照常吃）；
+    // 吃过鹏鸟的熊猫则把飞行与它已经学到的地面吃法叠在一起——否则吃一只鸟反倒会变弱。
+    var canFly = (u.kind === 'roc') || (u.kind === 'panda' && !!u.hasRoc);
+    if (canFly) {
+      var taken = Object.create(null);
+      for (var k0 = 0; k0 < out.length; k0++) taken[out[k0].to] = 1;
+      for (var fi = 0; fi < st.board.length; fi++) {
+        if (fi === cell || st.board[fi] || taken[fi]) continue;
+        if (isWater(fi) && !isSwimmer(u)) continue;
+        out.push({ to: fi, kind: 'fly' });
+      }
+    }
+    return out;
+  }
+
+  function skillsFor(st, cell) {
+    var u = st.board[cell];
+    if (!u || !u.revealed || u.jailed > 0) return [];
+    if (u.moves <= 0) return [];      // 这一回合的行动力已经用掉了（狼连吃、企鹅冰封之后都是这种情况）
+    var out = [];
+    var has = function (k) {
+      if (u.kind === k) return true;
+      if (u.kind === 'panda') return !!u['has' + k.charAt(0).toUpperCase() + k.slice(1)];
+      return false;
+    };
+    if (has('leopard') && !u.used.blast) out.push({ id: 'blast', need: SKILL_NEED.blast, label: '自爆 5.5（3×3，占回合）' });
+    if (has('tiger') && !u.used.pounce) out.push({ id: 'pounce', need: SKILL_NEED.pounce, label: '猛扑 7（相邻，占回合）' });
+    if (has('lion') && !u.used.volley) out.push({ id: 'volley', need: SKILL_NEED.volley, label: '狮王矢 7（直线单体，占回合）' });
+    if (has('penguin') && !u.used.freeze) out.push({ id: 'freeze', need: SKILL_NEED.freeze, label: '冰封（禁锢敌方 1 回合，不占回合）' });
+    if (u.kind === 'dino' && !u.frozen && !u.used.shock) out.push({ id: 'shock', need: SKILL_NEED.shock, label: '冲击波 6.5（一个方向，占回合）' });
+    if (u.kind === 'dino' && !u.frozen && !u.used.meteor) out.push({ id: 'meteor', need: SKILL_NEED.meteor, label: '陨石降临 8.5（自爆 3×3，占回合）' });
+    if (u.kind === 'kun' && !u.used.kunwave) out.push({ id: 'kunwave', need: SKILL_NEED.kunwave, label: '十字波涛 6.5（上下左右四条臂穿到底，占回合）' });
+    return out;
+  }
+
+  // ---- 动作执行 -------------------------------------------------------------
+  // 双方都磨不动时的兜底：连续 20 手「没掀牌、没吃子、没放技能」，按场上等级总和决算
+  // 只数「放弃行动」是不够的：对方挪一步就把计数清零，于是双方来回踱步能磨到天荒地老。
+  function boardCount(st) {
+    var n = 0;
+    for (var i = 0; i < st.board.length; i++) if (st.board[i]) n++;
+    return n;
+  }
+
+  // 场上的等级总和（冰封的恐龙不算战力，与 alive() 保持一致）
+  function rankSum(st, owner) {
+    var s = 0;
+    for (var i = 0; i < st.board.length; i++) {
+      var u = st.board[i];
+      if (!u || u.owner !== owner) continue;
+      if (u.kind === 'dino' && u.frozen) continue;
+      s += u.level;
+    }
+    return s;
+  }
+
+  // 「无人可挡」：对方场上没有任何动物吃得掉它（含鼠吃象特例）。
+  // 对方的暗牌按「可能有威胁」算。只算等级与吃子特例，不把技能算进去（船长 2026-10-18 定）。
+  function unbeatableUnits(st, owner) {
+    var foe = owner === 'red' ? 'blue' : 'red', out = [];
+    for (var i = 0; i < st.board.length; i++) {
+      var u = st.board[i];
+      if (!u || u.owner !== owner || !u.revealed) continue;
+      // 冰封的恐龙是中立困兽：不参与决算（船长 2026-10-18 裁定）——
+      // 解不解封是它主人的决策，决算不替他兜底。
+      if (u.kind === 'dino' && u.frozen) continue;
+      var safe = true;
+      for (var j = 0; j < st.board.length; j++) {
+        var v = st.board[j];
+        if (!v || v.owner !== foe) continue;
+        if (!v.revealed) { safe = false; break; }          // 暗牌不知道是什么，按有威胁算
+        if (v.kind === 'dino' && v.frozen) continue;       // 冻着的龙动不了
+        if (canEat(v, u)) { safe = false; break; }
+      }
+      if (safe) out.push(u);
+    }
+    return out;
+  }
+
+  // 双方都磨不动时的兜底（船长 2026-10-18 反馈：原来的「比总和」会让必败方靠飞行躲到决算捡赢）
+  // 先看有没有「无人可挡」的动物：只有一方握有它时，僵持改变不了结局，直接判该方胜；
+  // 双方都没有（或有来有回）才回到等级总和决算。
+  function settleByRank(st, events) {
+    var ru = unbeatableUnits(st, 'red'), bu = unbeatableUnits(st, 'blue');
+    if (!ru.length !== !bu.length) {
+      var win = ru.length ? 'red' : 'blue';
+      var mine = ru.length ? ru : bu;
+      var names = mine.map(function (u) { return NAME[u.kind] + '（' + u.level + '）'; }).join('、');
+      st.over = true;
+      st.result = win;
+      events.push({
+        t: 'over',
+        text: '双方连续 20 手没有实质进展，但' + (win === 'red' ? '红' : '蓝') + '方的 ' + names +
+          ' 无人可挡——对方没有任何动物吃得掉它，躲下去也改变不了结局，判' + (win === 'red' ? '红' : '蓝') + '方胜'
+      });
+      return;
+    }
+    var rs = rankSum(st, 'red'), bs = rankSum(st, 'blue');
+    st.over = true;
+    st.result = rs > bs ? 'red' : (bs > rs ? 'blue' : 'draw');
+    events.push({
+      t: 'over',
+      text: '双方连续 20 手没有实质进展——按场上等级总和决算：红 ' + rs + ' / 蓝 ' + bs + '，' +
+        (st.result === 'draw' ? '平局' : (st.result === 'red' ? '红方胜' : '蓝方胜'))
+    });
+  }
+
+  // ---- 棋谱：悔棋与复盘（船长 2026-10-17 要的）----------------------------
+  // history 里每一条是「走这一步之前」的局面快照，条目自带一句人话说明。
+  function cellName(i) { return '(' + (Math.floor(i / N) + 1) + ',' + (i % N + 1) + ')'; }
+  var SKILL_CN = { blast: '自爆', pounce: '猛扑', volley: '狮王矢', freeze: '冰封', shock: '冲击波', meteor: '陨石', kunwave: '十字波涛' };
+
+  function labelOf(pre, action) {
+    var who = pre.turn === 'red' ? '红' : '蓝';
+    var u = null;
+    if (action.type === 'reveal') {
+      u = pre.board[action.cell];
+      return who + '方掀开 ' + cellName(action.cell) +
+        (u ? '（' + NAME[u.kind] + ' ' + LEVEL[u.kind] + '，归' + (u.owner === 'red' ? '红' : '蓝') + '方）' : '');
+    }
+    if (action.type === 'escape') {
+      u = pre.escaped && pre.escaped.unit;
+      return who + '方 ' + (u ? NAME[u.kind] : '鼠') + ' 逃出生天 → ' + cellName(action.to);
+    }
+    if (action.type === 'move') {
+      u = pre.board[action.from];
+      var vic = pre.board[action.to];
+      var tail = '';
+      if (vic) {
+        tail = (vic.kind === 'dino' && vic.frozen)
+          ? (' 敲冰' + (u && vic.owner === u.owner
+              ? '（自家恐龙 ' + vic.level + '，值得敲开）'
+              : '（敌方恐龙 ' + vic.level + '，敲开等于帮它）'))
+          : (' 吃掉' + (vic.owner === 'red' ? '红' : '蓝') + '方 ' + NAME[vic.kind] + ' ' + vic.level);
+      }
+      return who + '方 ' + (u ? NAME[u.kind] + ' ' + u.level : '动物') + ' ' +
+        cellName(action.from) + '→' + cellName(action.to) + tail;
+    }
+    if (action.type === 'skill') {
+      u = pre.board[action.cell];
+      var pv = null;
+      try { pv = previewAction(pre, action); } catch (e) { pv = null; }
+      var tail2 = '';
+      if (pv) {
+        if (pv.kills.length) {
+          tail2 = '：击杀 ' + pv.kills.length + ' 只（' + pv.kills.map(function (k) {
+            return (k.u.owner === 'red' ? '红' : '蓝') + NAME[k.u.kind];
+          }).join('、') + '）';
+        } else if (pv.held.length) {
+          tail2 = '：一个都没打死';
+        }
+      }
+      return who + '方 ' + (u ? NAME[u.kind] : '') + ' 放「' + (SKILL_CN[action.skill] || action.skill) + '」' +
+        (action.dir !== undefined ? ' 朝' + ['上', '右', '下', '左'][action.dir] : '') +
+        (action.target !== undefined ? ' → ' + cellName(action.target) : '') + tail2;
+    }
+    if (action.type === 'skip') return who + '方放弃行动';
+    return who + '方 ' + action.type;
+  }
+
+  function pushHist(pre, action, res) {
+    var snap = clone(pre);
+    snap.history = [];                                  // 快照不带更早的棋谱，免得套娃
+    var entry = { label: labelOf(pre, action), state: snap, ply: pre.ply, turn: pre.turn };
+    res.state.history = res.state.history || [];
+    res.state.history.push(entry);
+    if (res.state.history.length > 500) res.state.history = res.state.history.slice(-500);
+  }
+
+  // 悔棋：退回上一步（手上的未来就没了，符合直觉）
+  function undo(st) {
+    if (!st.history || !st.history.length) return { ok: false, error: '已经在开局了' };
+    var h = st.history.slice();
+    var entry = h.pop();
+    var back = clone(entry.state);
+    back.history = h;
+    return { ok: true, state: back, label: entry.label };
+  }
+
+  // 复盘：把整局摊成 n+1 个视图（最后一个就是当前局面），供界面一页页翻
+  function timeline(st) {
+    var views = [];
+    for (var i = 0; i < st.history.length; i++) {
+      var v = clone(st.history[i].state);
+      v.history = st.history.slice(0, i);
+      v.stepLabel = st.history[i].label;
+      views.push(v);
+    }
+    var last = clone(st);
+    last.stepLabel = '（当前局面）';
+    views.push(last);
+    return views;
+  }
+
+  function applyAction(state, action) {
+    var before = state && state.board ? boardCount(state) : 0;
+    var res = applyActionRaw(state, action);
+    if (res && res.ok) {
+      var st2 = res.state;
+      pushHist(state, action, res);                      // 记一步棋（悔棋/复盘用）
+      // 只有「掀牌」「放技能」「场上少了动物」才算实质进展；来回踱步不重置计数
+      var progressed = (action.type === 'reveal') || (action.type === 'skill') ||
+        (boardCount(st2) < before);
+      if (progressed) st2.idle = 0; else st2.idle = (st2.idle || 0) + 1;
+      if (!st2.over && st2.idle >= 20) settleByRank(st2, res.events);
+    }
+    return res;
+  }
+
+  function applyActionRaw(state, action) {
+    var st = clone(state);
+    var events = [];
+    if (st.over) return { state: st, events: events, ok: false, error: '对局已结束' };
+    var me = st.turn;
+
+    // 逃生命中：只能落空白格
+    if (st.pending && st.pending.kind === 'escape') {
+      if (action.type !== 'escape') return fail(st, events, '鼠正在逃生，请先选择落点');
+      var u0 = st.escaped && st.escaped.unit;
+      var to = action.to;
+      if (!u0) { st.pending = null; return fail(st, events, '逃生状态异常'); }
+      if (st.board[to]) return fail(st, events, '逃生只能落在空白格');
+      if (isWater(to) && !isSwimmer(u0)) return fail(st, events, '深水区只有鼠和企鹅能进');
+      u0.cell = to; st.board[to] = u0;
+      st.escaped = null; st.pending = null;
+      events.push({ t: 'escape', cell: to, text: '鼠窜到了安全处（不占回合）' });
+      endTurn(st, events);                        // 逃生不占用回合，对手继续
+      return { state: st, events: events, ok: true };
+    }
+
+    // 狼的连吃选择
+    if (st.pending && st.pending.kind === 'chain') {
+      if (action.type === 'skip') { st.pending = null; finishMove(st, events); return { state: st, events: events, ok: true }; }
+      if (action.type === 'move') {
+        var w0 = st.board[action.from];
+        if (!w0 || st.pending.cell !== action.from) return fail(st, events, '连吃对象不合法');
+        if (st.pending.targets.indexOf(action.to) < 0) return fail(st, events, '这个目标不在连吃范围内');
+        doEatChain(st, action.from, action.to, events);
+        if (st.pending) return { state: st, events: events, ok: true };   // 还能继续连吃
+        finishMove(st, events);
+        return { state: st, events: events, ok: true };
+      }
+      return fail(st, events, '请选择连吃目标或放弃');
+    }
+
+    switch (action.type) {
+      case 'skip':
+        events.push({ t: 'skip', text: '放弃本回合的行动' });
+        finishMove(st, events);
+        break;
+      case 'reveal': {
+        var u = st.board[action.cell];
+        if (!u || u.revealed) return fail(st, events, '这里没有可掀的牌');
+        var isMine = (u.owner === me);
+        u.revealed = true;
+        events.push({ t: 'reveal', cell: action.cell, mine: isMine,
+          text: '掀开 ' + NAME[u.kind] + '（等级 ' + u.level + '）' +
+                (isMine ? '' : '——竟然是' + (u.owner === 'red' ? '红方' : '蓝方') + '的！') });
+        if (u.kind === 'dino') {
+          u.frozen = true; u.frozenHits = 0;
+          events.push({ t: 'frozen', cell: action.cell, text: '恐龙带着冰封之躯现身——需要等级≥7 的攻击才能解冻' });
+        }
+        finishMove(st, events);
+        break;
+      }
+      case 'move': {
+        var mv = st.board[action.from];
+        if (!mv) return fail(st, events, '这里没有你的动物');
+        if (mv.owner !== me) return fail(st, events, '不是你的动物');
+        if (!mv.revealed) return fail(st, events, '暗牌不能移动，先把它掀开');
+        if (mv.moves <= 0) return fail(st, events, '这个动物本回合已经行动过了');
+        if (mv.jailed > 0) return fail(st, events, '被冰封的动物无法行动');
+        if (mv.kind === 'dino' && mv.frozen) return fail(st, events, '冰冻的恐龙无法行动');
+        var list = moveTargets(st, action.from);
+        var found = null;
+        for (var i = 0; i < list.length; i++) if (list[i].to === action.to) found = list[i];
+        if (!found) return fail(st, events, '不能走到那里');
+        var tgt = st.board[action.to];
+        if (found.kind === 'fly') {
+          st.board[action.from] = null; mv.cell = action.to; st.board[action.to] = mv; mv.moves--;
+          events.push({ t: 'fly', cell: action.to, text: NAME[mv.kind] + '掠过棋盘，落在空位' });
+          finishMove(st, events);
+        } else if (found.kind === 'hop') {
+          st.board[action.from] = null; mv.cell = action.to; st.board[action.to] = mv; mv.moves--;
+          events.push({ t: 'move', cell: action.to, text: NAME[mv.kind] + '翻越障碍落位' });
+          finishMove(st, events);
+        } else if (found.kind === 'thaw') {
+          var din = st.board[action.to];
+          if (crackAllowed(st)) {
+            din.frozenHits = (din.frozenHits || 0) + 1;
+            events.push({ t: 'thawHit', cell: action.to, text: (din.owner === mv.owner ? '自家 ' : '') + NAME[mv.kind] + ' 撞在冰层上（' + din.frozenHits + '/2）' });
+            if (din.frozenHits >= 2) {
+              din.frozen = false; din.frozenHits = 0;
+              events.push({ t: 'thaw', cell: action.to, text: '冰层碎了——恐龙解冻成功！' });
+            }
+          } else {
+            events.push({ t: 'thawHit', cell: action.to, text: NAME[mv.kind] + ' 撞在冰层上，冰面纹丝不动' });
+          }
+          mv.moves--;
+          finishMove(st, events);
+        } else if (tgt) {
+          doEatChain(st, action.from, action.to, events);
+          if (st.pending) return { state: st, events: events, ok: true };   // 等逃生 / 等连吃选择
+          finishMove(st, events);
+        } else {
+          st.board[action.from] = null; mv.cell = action.to; st.board[action.to] = mv; mv.moves--;
+          finishMove(st, events);
+        }
+        break;
+      }
+      case 'skill':
+        return applySkill(st, events, me, action);
+      default:
+        return fail(st, events, '未知动作');
+    }
+    if (st.pending) return { state: st, events: events, ok: true };  // 等待子决策
+    return { state: st, events: events, ok: true };
+  }
+
+  function fail(st, events, msg) {
+    return { state: clone(st), events: [], ok: false, error: msg };
+  }
+
+  function doEat(st, from, to, events) {
+    if (doEatBase(st, from, to, events)) return;   // 等待鼠逃生
+    finishMove(st, events);
+  }
+
+  // 连吃用：吃掉后继续检查连吃机会，不结束回合
+  function doEatChain(st, from, to, events) {
+    if (doEatBase(st, from, to, events)) return;
+    st.pending = null;              // 旧的连吃状态作废，由 checkChain 按新位置重算
+    checkChain(st, to, events);
+  }
+
+  // 返回 true 表示正在等待「鼠逃生」的子决策
+  function doEatBase(st, from, to, events) {
+    var oldPending = st.pending;   // 连吃时旧 pending 会残留，先存一份
+    var atk = st.board[from], def = st.board[to];
+    var defKind = def.kind;
+    events.push({ t: 'attack', text: NAME[atk.kind] + ' 吃 ' + NAME[def.kind] });
+    // 冰封的恐龙是无敌的：任何攻击撞上去都只是敲冰（一次一层），攻方留在原地、占回合
+    // （船长 2026-10-16 裁定：大象的撞击是解封恐龙，而不是连冰块吞下）
+    if (def.kind === 'dino' && def.frozen) {
+      atk.moves = Math.max(0, atk.moves - 1);
+      if (crackAllowed(st)) {
+        def.frozenHits = (def.frozenHits || 0) + 1;
+        events.push({ t: 'thawHit', cell: to, text: NAME[atk.kind] + ' 撞在冰层上（' + def.frozenHits + '/2）' });
+        if (def.frozenHits >= 2) {
+          def.frozen = false; def.frozenHits = 0;
+          events.push({ t: 'thaw', cell: to, text: '冰层碎了——恐龙解冻成功！' });
+        }
+      } else {
+        events.push({ t: 'thawHit', cell: to, text: NAME[atk.kind] + ' 撞在冰层上，冰面纹丝不动' });
+      }
+      st.pending = null;
+      finishMove(st, events);
+      return false;
+    }
+    // 同级同归于尽：两个都碎，鼠的「逃出生天」是躲开致命一击，这里逃不掉
+    if (def.level === atk.level) {
+      st.pending = null;
+      events.push({ t: 'clash', text: '同级相撞，同归于尽' });
+      st.board[to] = null;
+      st.board[from] = null;
+      kill(st, from, -1, events, false);
+      return false;
+    }
+    if (canEat(atk, def)) {
+      var snapshot = { kind: def.kind, level: def.level, owner: def.owner };
+      st.pending = null;                        // 清掉旧的连吃状态，才判得准新产生的子决策
+      kill(st, to, from, events, true);
+      var escaping = !!st.pending;              // 鼠触发了逃出生天
+      if (!escaping) st.pending = oldPending;   // 连吃选择留给调用方重新计算
+      // 吃子一律先落位（自爆 / 冲击波 / 陨石 / 狮王矢那些技能不走这里）
+      st.board[from] = null; atk.cell = to; st.board[to] = atk; atk.moves = Math.max(0, atk.moves - 1);
+      if (!escaping) afterMeal(st, atk, to, events, snapshot);   // 鼠窜了就不算吃到：熊猫不成长、狼也不连吃
+      return escaping;
+    }
+    return false;
+  }
+
+  // 吃啥补啥：熊猫只学「被动、能反复用」的能力（船长 2026-10-16 裁定）
+  //   · 学得到：猫侧击、狗疾行、狼连吃、象巨力、鹏鸟翱翔
+  //   · 学不到：豹自爆、虎猛扑、狮王矢、企鹅冰封（都是一次性招数），恐龙的冲击波/陨石同理 —— 吃了只涨等级
+  // 以后要加新能力，只把「被动·无限次」的写进 LEARNABLE，并接上 moveTargets/skillsFor 里的 hasXxx 判断。
+  var LEARNABLE = { cat: '侧击', dog: '疾行', wolf: '连吃', elephant: '巨力', roc: '翱翔' };
+  var NOT_LEARNABLE = { leopard: '自爆', tiger: '猛扑', lion: '狮王矢', penguin: '冰封',
+                        dino: '冲击波/陨石', kun: '十字波涛' };
+
+  function inherit(st, panda, eatenKind, atkCell, events) {
+    var gained = false;
+    var key = 'has' + eatenKind.charAt(0).toUpperCase() + eatenKind.slice(1);
+    if (LEARNABLE[eatenKind]) {
+      if (!panda[key]) { panda[key] = true; gained = true; }
+      events.push({ t: 'learn', cell: atkCell,
+        text: '熊猫吃啥补啥：获得 ' + NAME[eatenKind] + ' 的「' + LEARNABLE[eatenKind] + '」' + (gained ? '' : '（已拥有）') });
+      return;
+    }
+    if (NOT_LEARNABLE[eatenKind]) {
+      events.push({ t: 'learn', cell: atkCell,
+        text: '熊猫吃啥补啥：「' + NOT_LEARNABLE[eatenKind] + '」是一次性的招数，学不到（只涨等级）' });
+    }
+  }
+
+  // 鹏鸟吞下敌方企鹅 → 化身为「鲲」（船长 2026-10-18 追加的特殊变种）：
+  // 等级升到 7，失去翱翔（不能再飞），换来会游泳（可进中央深水），并得到一次性的「十字波涛」。
+  // 变身只是换 kind / level，owner、id、moves 都不动 —— 吃子这一手照常结束。
+  function evolveToKun(atk, atkCell, events) {
+    atk.kind = 'kun';
+    atk.level = LEVEL.kun;
+    atk.used.kunwave = false;
+    events.push({ t: 'evolve', cell: atkCell,
+      text: '鹏鸟吞下企鹅——化而为鲲！等级升到 ' + LEVEL.kun + '：失去翱翔，能入深水，多出一记「十字波涛」' });
+  }
+
+  // 熊猫成长（吃掉后）
+  function afterMeal(st, atk, atkCell, events, eaten) {
+    if (!(st.flags && st.flags.kun === false) &&
+        atk.kind === 'roc' && eaten && eaten.kind === 'penguin' && eaten.owner !== atk.owner) {
+      evolveToKun(atk, atkCell, events);
+      return;
+    }
+    if (atk.kind === 'panda' && !(st.flags && st.flags.panda === false)) {
+      var before = atk.level;
+      atk.level = Math.min(8.5, atk.level + 1);
+      events.push({ t: 'grow', cell: atkCell, text: '熊猫成长：等级 ' + before + ' → ' + atk.level });
+      if (eaten) inherit(st, atk, eaten.kind, atkCell, events);
+    }
+  }
+
+  // 狼连吃检测（CORE_MARK_2026）
+  function checkChain(st, wolfCell, events) {
+    var w = st.board[wolfCell];
+    if (!w) return;
+    var canChain = (w.kind === 'wolf') || (w.kind === 'panda' && !!w.hasWolf);
+    if (!canChain) return;
+    var targets = [];
+    var r0 = Math.floor(wolfCell / N), c0 = wolfCell - r0 * N;
+    var deltas = [[r0 - 1, c0], [r0 + 1, c0], [r0, c0 - 1], [r0, c0 + 1]];
+    for (var k = 0; k < 4; k++) {
+      var rr = deltas[k][0], cc = deltas[k][1];
+      if (rr < 0 || rr >= N || cc < 0 || cc >= N) continue;
+      var nb = rr * N + cc;
+      var tt = st.board[nb];
+      if (!tt || !tt.revealed) continue;
+      if (tt.owner === w.owner) continue;
+      if (canEat(w, tt) && canStand(w, nb)) targets.push(nb);
+    }
+    if (targets.length) {
+      st.pending = { kind: 'chain', cell: wolfCell, targets: targets };
+      events.push({ t: 'chain', cell: wolfCell, text: '连吃机会：四周有 ' + targets.length + ' 个可吃目标，可继续吃或放弃' });
+    }
+  }
+
+  function finishMove(st, events) {
+    if (st.over) return;
+    endTurn(st, events);
+    checkOver(st, events);
+  }
+
+  // 某一方还有没有冻在冰里的恐龙（中立困兽：不顶兵力，但双方都够得着）
+  function hasIce(st, owner) {
+    for (var i = 0; i < st.board.length; i++) {
+      var u = st.board[i];
+      if (u && u.owner === owner && u.kind === 'dino' && u.frozen) return true;
+    }
+    return false;
+  }
+
+  function checkOver(st, events) {
+    // 冰封中的恐龙不算兵力（船长 2026-10-17：它是中立存在，不影响胜局）
+    var r = alive(st, 'red'), b = alive(st, 'blue');
+    var rIce = hasIce(st, 'red'), bIce = hasIce(st, 'blue');
+    if (r === 0 && b === 0) {
+      st.over = true; st.result = 'draw';
+      events.push({ t: 'over', text: (rIce || bIce) ? '两边都没了能动的动物，只剩冰里那头困兽——平局' : '双方同归于尽，平局' });
+    } else if (b === 0) {
+      st.over = true; st.result = 'red';
+      events.push({ t: 'over', text: bIce ? '蓝方只剩一只冰封中的恐龙（它不算任何一方的兵力），等不来解封——红方胜利！' : '蓝方全灭，红方胜利！' });
+    } else if (r === 0) {
+      st.over = true; st.result = 'blue';
+      events.push({ t: 'over', text: rIce ? '红方只剩一只冰封中的恐龙（它不算任何一方的兵力），等不来解封——蓝方胜利！' : '红方全灭，蓝方胜利' });
+    }
+  }
+
+  // ---- 技能 -----------------------------------------------------------------
+  function applySkill(st, events, me, action) {
+    var u = st.board[action.cell];
+    if (!u || u.owner !== me) return fail(st, events, '不是你的动物');
+    var sk = skillsFor(st, action.cell);
+    var has = false;
+    for (var i = 0; i < sk.length; i++) if (sk[i].id === action.skill) has = true;
+    if (!has) return fail(st, events, '这个技能现在不能用');
+
+    if (action.skill === 'freeze') {
+      var tgt = st.board[action.target];
+      if (!tgt || tgt.owner === me || !tgt.revealed) return fail(st, events, '冰封只能选一个已公开的敌方单位');
+      tgt.jailed = 2;                                  // 本回合计数器，跨到下个对方回合时生效一次
+      u.used.freeze = true;
+      events.push({ t: 'freeze', cell: action.target, text: '企鹅冰封了 ' + NAME[tgt.kind] + '（公开可见，下一回合无法行动）' });
+      // 规则：冰封「不占回合」——这一手不算你的回合，你还能指挥别的动物或掀牌；
+      // 但企鹅放完技能就动不了了（否则一只企鹅能白嫖一次满额行动）。
+      u.moves = 0;
+      return { state: st, events: events, ok: true };
+    }
+
+    if (action.skill === 'blast') {
+      if (u.used.blast) return fail(st, events, '自爆已经用过了');
+      u.used.blast = true;
+      var p = rc(action.cell);
+      st.board[action.cell] = null;
+      events.push({ t: 'blast', text: '豹自爆！（3×3 / 5.5 伤害）' });
+      for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) {
+        var r = p.r + dr, c = p.c + dc;
+        if (!inBoard(r, c)) continue;
+        var t2 = st.board[idx(r, c)];
+        if (!t2 || !t2.revealed) continue;
+        hitWithDamage(st, idx(r, c), 5.5, -1, events);   // 5.5 伤害：扛不住的死，扛得住的不动
+      }
+      if (st.pending) return { state: st, events: events, ok: true };
+      endTurn(st, events); checkOver(st, events);
+      return { state: st, events: events, ok: true };
+    }
+
+    if (action.skill === 'pounce') {
+      var t3 = st.board[action.target];
+      // 冰封中的恐龙是中立困兽，谁的猛扑都能砸它（船长 2026-10-17）
+      var anyIce = !!(t3 && t3.kind === 'dino' && t3.frozen);
+      if (!t3 || (!anyIce && t3.owner === me) || !t3.revealed) return fail(st, events, '猛扑目标是相邻的已公开敌方单位（冰封中的恐龙谁都能砸）');
+      if (Math.abs(rc(action.cell).r - rc(action.target).r) + Math.abs(rc(action.cell).c - rc(action.target).c) !== 1)
+        return fail(st, events, '猛扑只能打上下左右相邻');
+      u.used.pounce = true;
+      events.push({ t: 'pounce', text: anyIce
+        ? (t3.owner === me ? '虎猛扑自家恐龙，一掌砸在冰层上（威力 7）' : '虎猛扑那头冰封中的恐龙，一掌砸在冰层上（威力 7）')
+        : '虎猛扑 ' + NAME[t3.kind] + '（威力 7）' });
+      hitWithDamage(st, action.target, 7, action.cell, events);
+      if (st.pending) return { state: st, events: events, ok: true };
+      endTurn(st, events); checkOver(st, events);
+      return { state: st, events: events, ok: true };
+    }
+
+    if (action.skill === 'volley') {
+      u.used.volley = true;
+      var dir = DIR8[action.dir];
+      if (!dir) return fail(st, events, '需要选择一个方向');
+      var q = rc(action.cell), rr = q.r + dir.dr, cc = q.c + dir.dc, hitCells = [];
+      // 削弱（船长 2026-10-16）：不再穿障——遇到第一个挡路的单位就停下，
+      // 只有那一个「已公开的敌人」会挨这一箭；暗牌挡箭不掉血
+      while (inBoard(rr, cc) && !st.board[idx(rr, cc)]) { rr += dir.dr; cc += dir.dc; }
+      var armor = inBoard(rr, cc) ? st.board[idx(rr, cc)] : null;
+      // 冰封中的恐龙是中立困兽：谁的箭射中它，都是帮它敲掉一层冰（船长 2026-10-17）
+      var anyIce2 = !!(armor && armor.revealed && armor.kind === 'dino' && armor.frozen);
+      if (armor && armor.revealed && (armor.owner !== me || anyIce2)) hitCells.push(idx(rr, cc));
+      events.push({ t: 'volley', text: '狮王矢沿「' + dir.name + '」射出（威力 7）'
+        + (anyIce2 ? '，正中那头冰封中的恐龙' : (armor && !hitCells.length ? '，被前方的东西挡了下来' : (armor ? '' : '，一路空落'))) });
+      for (var z = 0; z < hitCells.length; z++) hitWithDamage(st, hitCells[z], 7, action.cell, events);
+      if (st.pending) return { state: st, events: events, ok: true };
+      endTurn(st, events); checkOver(st, events);
+      return { state: st, events: events, ok: true };
+    }
+
+    if (action.skill === 'shock') {
+      var dir2 = DIR8[action.dir];
+      if (!dir2) return fail(st, events, '需要选择一个方向');
+      u.used.shock = true;
+      events.push({ t: 'shock', text: '恐龙释放冲击波，向「' + dir2.name + '」横扫（6.5 伤害，未公开单位被击退）' });
+      var q2 = rc(action.cell), r2 = q2.r + dir2.dr, c2 = q2.c + dir2.dc;
+      var victims = [];
+      while (inBoard(r2, c2)) {
+        var t5 = st.board[idx(r2, c2)];
+        if (t5) victims.push({ cell: idx(r2, c2), u: t5 });
+        r2 += dir2.dr; c2 += dir2.dc;
+      }
+      // 从远到近结算，避免推动顺序问题
+      victims.reverse();
+      for (var v = 0; v < victims.length; v++) {
+        var cell = victims[v].cell, unit = st.board[cell];
+        if (!unit) continue;
+        if (!unit.revealed) { pushUnit(st, cell, dir2, events); continue; }
+        if (unit.owner === u.owner) { /* 友军：波只打敌人？——按「所有目标」，含友军 */ }
+        hitWithDamage(st, cell, 6.5, action.cell, events, dir2, true);
+      }
+      if (st.pending) return { state: st, events: events, ok: true };
+      endTurn(st, events); checkOver(st, events);
+      return { state: st, events: events, ok: true };
+    }
+
+    if (action.skill === 'kunwave') {
+      // 十字波涛：以鲲为中心，上下左右**四条臂各自穿到棋盘边缘**，每个目标 6.5 伤害；
+      // 扛得住的已公开目标与暗牌沿「各自所在方向」被击退 —— 与恐龙冲击波的击退机制同源。
+      // 每条臂内部从远到近结算（同冲击波），四条臂互不相交，臂与臂之间顺序无关。
+      u.used.kunwave = true;
+      events.push({ t: 'kunwave', text: '鲲搅起十字波涛！（上下左右整整四条臂 / 6.5 伤害，扛得住的和暗牌被击退）' });
+      var kp = rc(action.cell);
+      for (var kd = 0; kd < 4; kd++) {
+        var kdir = DIR8[kd];
+        var karm = [];
+        var kr = kp.r + kdir.dr, kc = kp.c + kdir.dc;
+        while (inBoard(kr, kc)) {
+          var kcell = idx(kr, kc);
+          if (st.board[kcell]) karm.push(kcell);
+          kr += kdir.dr; kc += kdir.dc;
+        }
+        karm.reverse();   // 从远到近结算，避免推动顺序问题
+        for (var ka = 0; ka < karm.length; ka++) {
+          var kc2 = karm[ka], kunit = st.board[kc2];
+          if (!kunit) continue;
+          if (!kunit.revealed) { pushUnit(st, kc2, kdir, events); continue; }
+          hitWithDamage(st, kc2, 6.5, action.cell, events, kdir, true);
+        }
+      }
+      if (st.pending) return { state: st, events: events, ok: true };
+      endTurn(st, events); checkOver(st, events);
+      return { state: st, events: events, ok: true };
+    }
+
+    if (action.skill === 'meteor') {
+      u.used.meteor = true;
+      var mp = rc(action.cell);
+      st.board[action.cell] = null;
+      events.push({ t: 'meteor', text: '恐龙自爆——陨石降临！（3×3 / 8.5 伤害）' });
+      for (var dr2 = -1; dr2 <= 1; dr2++) for (var dc2 = -1; dc2 <= 1; dc2++) {
+        var rr2 = mp.r + dr2, cc2 = mp.c + dc2;
+        if (!inBoard(rr2, cc2)) continue;
+        var tv = st.board[idx(rr2, cc2)];
+        if (tv && tv.revealed) kill(st, idx(rr2, cc2), -1, events, false);
+      }
+      if (st.pending) return { state: st, events: events, ok: true };
+      endTurn(st, events); checkOver(st, events);
+      return { state: st, events: events, ok: true };
+    }
+
+    return fail(st, events, '技能未实现');
+  }
+
+  // ---- 结算预览（船长 2026-10-17）-------------------------------------------
+  // 不动手，先把这一招「会打死谁、谁扛得住」算出来。
+  // 军师评分（game-ai.js）和 AI 棋手的说明书（game-llm.js）都用它，
+  // 免得两边各算一遍、各错一遍（「对着 7 级狮 + 8 级象放 5.5 自爆」就是这么来的）。
+  function previewAction(st, action) {
+    var me = null;
+    if (action.type === 'skill' && st.board[action.cell]) me = st.board[action.cell].owner;
+    else if (action.type === 'move' && st.board[action.from]) me = st.board[action.from].owner;
+    if (!me) me = st.turn;
+    function label(u) { return (u.owner === 'red' ? '红' : '蓝') + NAME[u.kind] + LEVEL[u.kind]; }
+
+    var res = { kills: [], held: [], hidden: 0, blocked: null, selfDies: false,
+                foeGain: 0, ownLoss: 0, text: '' };
+
+    function hit(cell, dmg, push) {
+      var u = st.board[cell];
+      if (!u) return;
+      if (u.kind === 'dino' && u.frozen) {   // 冰封中的恐龙：伤害≥7 才裂一层，那一下也不掉血；不够就只被推
+        res.held.push({ u: u, why: dmg >= 7 ? '冰层裂一层' : (push ? '破不开冰，但整块冰被推开' : '破不开冰') });
+        return;
+      }
+      if (!u.revealed) {
+        res.hidden++;
+        if (push) res.held.push({ u: u, why: '暗牌只被击退，不掉血' });
+        return;
+      }
+      if (dmg >= LEVEL[u.kind]) {
+        res.kills.push({ u: u, cell: cell });
+        if (u.owner === me) res.ownLoss += LEVEL[u.kind]; else res.foeGain += LEVEL[u.kind];
+      } else {
+        res.held.push({ u: u, why: '等级 ' + LEVEL[u.kind] + ' > 伤害 ' + dmg + '，白打' + (push ? '（被击退）' : '') });
+      }
+    }
+
+    if (action.type === 'skill') {
+      var u0 = st.board[action.cell];
+      var p = u0 ? rc(action.cell) : { r: 0, c: 0 };
+      if (action.skill === 'blast' || action.skill === 'meteor') {
+        var isM = (action.skill === 'meteor');
+        res.selfDies = true;
+        for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) {
+          var r = p.r + dr, c = p.c + dc;
+          if (!inBoard(r, c) || idx(r, c) === action.cell) continue;
+          var cell = idx(r, c), u = st.board[cell];
+          if (!u) continue;
+          if (isM) {          // 陨石：3×3 里已公开的一律砸碎（连冰龙一起），暗牌不受影响
+            if (!u.revealed) continue;
+            res.kills.push({ u: u, cell: cell });
+            if (u.owner === me) res.ownLoss += LEVEL[u.kind]; else res.foeGain += LEVEL[u.kind];
+          } else {
+            hit(cell, 5.5, false);
+          }
+        }
+      } else if (action.skill === 'pounce') {
+        hit(action.target, 7, false);
+      } else if (action.skill === 'volley') {
+        var dir = DIR8[action.dir];
+        if (dir) {
+          var rr = p.r + dir.dr, cc = p.c + dir.dc;
+          while (inBoard(rr, cc) && !st.board[idx(rr, cc)]) { rr += dir.dr; cc += dir.dc; }
+          if (inBoard(rr, cc)) {
+            var arm = st.board[idx(rr, cc)];
+            var ice = !!(arm.revealed && arm.kind === 'dino' && arm.frozen);
+            if (arm.revealed && (arm.owner !== me || ice)) hit(idx(rr, cc), 7, false);
+            else res.blocked = (arm.revealed ? label(arm) : '一张暗牌');
+          }
+        }
+      } else if (action.skill === 'shock') {
+        var d2 = DIR8[action.dir];
+        if (d2) {
+          var r2 = p.r + d2.dr, c2 = p.c + d2.dc;
+          while (inBoard(r2, c2)) { hit(idx(r2, c2), 6.5, true); r2 += d2.dr; c2 += d2.dc; }
+        }
+      } else if (action.skill === 'kunwave') {
+        // 十字四条臂各穿到底：臂上每个目标 6.5，扛得住的和暗牌被击退
+        for (var kd2 = 0; kd2 < 4; kd2++) {
+          var kdir2 = DIR8[kd2];
+          var kr2 = p.r + kdir2.dr, kc2 = p.c + kdir2.dc;
+          while (inBoard(kr2, kc2)) { hit(idx(kr2, kc2), 6.5, true); kr2 += kdir2.dr; kc2 += kdir2.dc; }
+        }
+      } else if (action.skill === 'freeze') {
+        var ft = st.board[action.target];
+        res.text = ft ? ('禁锢 ' + label(ft) + '（下一回合动不了，不掉血）') : '';
+        return res;
+      }
+    } else if (action.type === 'move') {
+      var mv = st.board[action.from], tg = st.board[action.to];
+      if (mv && tg && tg.revealed && tg.owner !== me) {
+        if (LEVEL[tg.kind] === LEVEL[mv.kind]) {   // 同级同归于尽
+          res.selfDies = true;
+          res.kills.push({ u: tg, cell: action.to });
+          res.ownLoss += LEVEL[mv.kind]; res.foeGain += LEVEL[tg.kind];
+        } else {
+          hit(action.to, LEVEL[mv.kind], false);
+        }
+      }
+    }
+
+    var foeKills = res.kills.filter(function (k) { return k.u.owner !== me; });
+    var ownKills = res.kills.filter(function (k) { return k.u.owner === me; });
+    var parts = [];
+    if (foeKills.length) parts.push('打死 ' + foeKills.length + ' 只（' + foeKills.map(function (k) { return label(k.u); }).join('、') + '）');
+    if (ownKills.length) parts.push('误伤自家 ' + ownKills.length + ' 只（' + ownKills.map(function (k) { return label(k.u); }).join('、') + '）');
+    if (res.held.length) parts.push('打不动：' + res.held.map(function (h) { return label(h.u) + '（' + h.why + '）'; }).join('、'));
+    if (res.blocked) parts.push('被 ' + res.blocked + ' 挡下，谁都没伤到');
+    if (res.selfDies) parts.push('自己阵亡');
+    if (!parts.length && res.hidden) parts.push('只推走 ' + res.hidden + ' 张暗牌');
+    res.text = parts.join('；');
+    res.foeKills = foeKills.length;
+    res.ownKills = ownKills.length;
+    return res;
+  }
+
+  // 伤害结算（会处理冰冻解冻、未公开免疫、等级>=7 解冻）
+  // pushSurvive：目标扛住时是否被击退 —— 只有冲击波（恐龙）与十字波涛（鲲）带击退效果
+  function hitWithDamage(st, cell, dmg, fromCell, events, pushDir, pushSurvive) {
+    var t = st.board[cell];
+    if (!t) return;
+    if (!t.revealed) { events.push({ t: 'immune', text: '暗牌不受伤害（只被击退）' }); if (pushDir) pushUnit(st, cell, pushDir, events); return; }
+    if (t.kind === 'dino' && t.frozen) {
+      if (dmg >= 7 && crackAllowed(st)) {
+        t.frozenHits = (t.frozenHits || 0) + 1;
+        if (t.frozenHits >= 2) {
+          t.frozen = false;
+          t.frozenHits = 0;
+          events.push({ t: 'thaw', cell: cell, text: '冰层彻底碎裂——恐龙解冻并现身！' });
+        } else {
+          events.push({ t: 'thaw', cell: cell, text: '冰层出现裂痕（还需一次威力≥7的攻击）' });
+        }
+        return;                                      // 解冻当次不结算伤害
+      } else {
+        // 船长 2026-10-18 裁定：冰封恐龙「无法被击杀」，所以它和别的扛住者一样会被击退
+        // （冰层本身不裂 —— 破冰仍要威力 ≥7；只是整块冰被推着走）
+        if (pushSurvive && pushDir) {
+          pushUnit(st, cell, pushDir, events);
+          events.push({ t: 'immune', cell: cell, text: '破不开冰层（需威力≥7），但整块冰被推开了' });
+        } else {
+          events.push({ t: 'immune', cell: cell, text: '伤害不足以破开冰层（需威力≥7）' });
+        }
+        return;
+      }
+    }
+    var lethal = dmg >= t.level;
+    if (lethal) kill(st, cell, fromCell, events, false);
+    else {
+      if (pushSurvive && pushDir) pushUnit(st, cell, pushDir, events);
+      events.push({ t: 'scratch', cell: cell, text: NAME[t.kind] + ' 扛住了（伤害 ' + dmg + ' < 等级 ' + t.level + '）' });
+    }
+  }
+
+  function pushUnit(st, cell, dir, events) {
+    var u = st.board[cell];
+    if (!u) return;
+    var q = rc(cell), r = q.r, c = q.c, last = cell;
+    while (true) {
+      var nr = r + dir.dr, nc = c + dir.dc;
+      if (!inBoard(nr, nc)) break;
+      var ni = idx(nr, nc);
+      if (st.board[ni]) break;
+      if (isWater(ni) && !isSwimmer(u)) break;
+      last = ni; r = nr; c = nc;
+    }
+    if (last === cell) return;
+    st.board[cell] = null; u.cell = last; st.board[last] = u;
+    events.push({ t: 'push', cell: last, text: NAME[u.kind] + ' 被击退' });
+  }
+
+  // ---- 输出 -----------------------------------------------------------------
+  var API = {
+    N: N, WATER: WATER, LEVEL: LEVEL, NAME: NAME, ICON: ICON, ROSTER: ROSTER,
+    SKILL_TEXT: SKILL_TEXT, SKILL_NEED: SKILL_NEED, skillNeed: skillNeed,
+    newGame: newGame, clone: clone, setSeed: rng.setSeed, getSeed: rng.getSeed,
+    applyAction: applyAction, moveTargets: moveTargets, skillsFor: skillsFor,
+    previewAction: previewAction,
+    undo: undo, timeline: timeline, cellName: cellName,
+    canEat: canEat, alive: alive, other: other, idx: idx, rc: rc, isWater: isWater,
+    escapeOwner: escapeOwner, actorOf: actorOf,
+    isSwimmer: isSwimmer, DIR8: DIR8, DIR4: DIR4, pushUnit: pushUnit,
+    WHALE_CELLS: WHALE_CELLS, pliesToWhale: pliesToWhale, whaleStrike: whaleStrike
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+  root.CaptainBeast = API;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+/* 船长斗兽棋 —— 电脑对手（启发式评分，不搜索深层）
+   用法：CaptainAI.decide(state) → action（可直接交给 CaptainBeast.applyAction） */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./game-core.js'));
+  else root.CaptainAI = factory(root.CaptainBeast);
+})(typeof self !== 'undefined' ? self : this, function (g) {
+  'use strict';
+
+  function cellsOf(st, owner) {
+    var out = [];
+    for (var i = 0; i < st.board.length; i++) {
+      var u = st.board[i];
+      if (u && u.owner === owner) out.push(i);
+    }
+    return out;
+  }
+
+  // 场上（已公开的）还有没有某方的某种动物——AI 不许偷看暗牌，只能看明牌
+  function hasRevealed(st, owner, kind) {
+    for (var i = 0; i < 25; i++) {
+      var u = st.board[i];
+      if (u && u.revealed && u.owner === owner && u.kind === kind) return true;
+    }
+    return false;
+  }
+
+  // 这个格子会挨几下（敌方已公开单位里，有几个能打到它）
+  function danger(st, cell, me) {
+    var foe = g.other(me), n = 0;
+    for (var i = 0; i < st.board.length; i++) {
+      var u = st.board[i];
+      if (!u || u.owner !== foe || !u.revealed) continue;
+      var ts = g.moveTargets(st, i);
+      for (var j = 0; j < ts.length; j++) if (ts[j].to === cell) n++;
+    }
+    return n;
+  }
+
+  // 危险要按「这只子值多少钱」打折——1 级鼠贴到 8 级象边上，和猫贴到狗边上，是不一样的
+  function dangerCost(st, cell, me, u) {
+    var d = danger(st, cell, me);
+    if (!d) return 0;
+    var lv = u ? g.LEVEL[u.kind] : 2;
+    return d * (1.2 + lv * 0.8);
+  }
+
+  // ---- 两条「看一眼看不出、想一手才看得出」的倾向（2026-10-17 船长问：
+  //      以深算那几档为灵感，还有没有能提升 AI 棋力的新倾向）------------------------
+  // 军师原本是纯静态评分：只看「这一步落点安不安全」，不看「走完之后自己还有没有子挂在对方嘴里」。
+  // 深算赢贪心主要就赢在这里，所以把它做成两条可单独开关的评分项。
+
+  // 一次把「对方所有明牌能打到的格子」全扫出来——要连着问很多格子时用它，比逐个格子调 danger() 省得多
+  function attackMap(st, me) {
+    var foe = g.other(me), m = {};
+    for (var i = 0; i < st.board.length; i++) {
+      var u = st.board[i];
+      if (!u || u.owner !== foe || !u.revealed) continue;
+      var ts = g.moveTargets(st, i);
+      for (var j = 0; j < ts.length; j++) m[ts[j].to] = (m[ts[j].to] || 0) + 1;
+    }
+    return m;
+  }
+
+  // 现在这一方有多少子**白挂在**对方嘴里：对方已公开的子能打到它、而我没有子能反吃回来（换子不算白送）
+  function hangOf(st, me) {
+    var foe = g.other(me);
+    var atkMap = attackMap(st, me), defMap = attackMap(st, foe);
+    var total = 0;
+    for (var i = 0; i < st.board.length; i++) {
+      var u = st.board[i];
+      if (!u || u.owner !== me) continue;
+      var atk = atkMap[i] || 0;
+      if (!atk) continue;
+      if (defMap[i]) continue;
+      total += g.LEVEL[u.kind] * (1 + (atk - 1) * 0.4);     // 等级越高越疼，被好几只盯上更疼
+    }
+    return total;
+  }
+
+  // 现在这一方有几个子正咬着对方的**明牌**（下一手能吃掉它）——只算已公开的，暗牌不敢押
+  function threatOf(st, me) {
+    var total = 0, seen = {};
+    for (var i = 0; i < st.board.length; i++) {
+      var u = st.board[i];
+      if (!u || u.owner !== me || !u.revealed || u.moves <= 0) continue;
+      var ts = g.moveTargets(st, i);
+      for (var j = 0; j < ts.length; j++) {
+        if (ts[j].kind !== 'eat' || seen[ts[j].to]) continue;
+        var v = st.board[ts[j].to];
+        if (!v || !v.revealed) continue;
+        seen[ts[j].to] = 1;
+        total += g.LEVEL[v.kind] * 0.6;
+      }
+    }
+    return total;
+  }
+
+  // ⚠️ 这个文件浏览器也用 <script> 直接加载，**不能碰 process**（浏览器里没有它，
+  // 顶层一读就 ReferenceError，整个 ai 模块全废——2026-10-17 就是这个把电脑搞得
+  // 「一手都走不出来、只会放弃回合」）。环境变量一律走这三行。
+  var ENV = (typeof process !== 'undefined' && process.env) ? process.env : {};
+  function envNum(name, dflt) {
+    var raw = ENV[name];
+    var v = Number(raw);
+    return (raw !== undefined && raw !== '' && isFinite(v)) ? v : dflt;
+  }
+
+  var HANG_W = envNum('WHALE_HANG_W', 12);        // 罚的力度（擂台扫过 6/12/24，差别不大）
+  var THREAT_W = envNum('WHALE_THREAT_W', 8);     // 奖的力度（擂台扫过 2/4/8，8 最好）
+  var REFINE = 40;                    // 给军师榜前 40 手补算这两条（AI 棋手只看前 8 条，够用了），别让每手拖到几十毫秒
+
+  // 离最近的敌人有多远——没有这一项，两边会互相躲到天荒地老
+  function nearestFoe(st, cell, me) {
+    var foe = g.other(me), q = g.rc(cell), best = 99;
+    for (var i = 0; i < st.board.length; i++) {
+      var u = st.board[i];
+      if (!u || u.owner !== foe) continue;
+      var p = g.rc(i), d = Math.abs(q.r - p.r) + Math.abs(q.c - p.c);
+      if (d < best) best = d;
+    }
+    return best === 99 ? 0 : best;
+  }
+
+  function around3(st, cell) {
+    var q = g.rc(cell), out = [];
+    for (var dr = -1; dr <= 1; dr++) {
+      for (var dc = -1; dc <= 1; dc++) {
+        if (!dr && !dc) continue;
+        var r = q.r + dr, c = q.c + dc;
+        if (r < 0 || r >= g.N || c < 0 || c >= g.N) continue;
+        out.push(g.idx(r, c));
+      }
+    }
+    return out;
+  }
+
+  function ray(st, cell, dir) {
+    var q = g.rc(cell), out = [], r = q.r + dir.dr, c = q.c + dir.dc;
+    while (r >= 0 && r < g.N && c >= 0 && c < g.N) {
+      out.push(g.idx(r, c));
+      r += dir.dr; c += dir.dc;
+    }
+    return out;
+  }
+
+  // 逃生 / 连吃这类「已经在进行中的子决策」
+  function resolvePending(st, me) {
+    var p = st.pending;
+    if (!p) return null;
+    if (p.kind === 'escape') {
+      var u0 = st.escaped && st.escaped.unit;
+      // 逃生落点由「鼠的主人」点（规则书·鼠），而吃鼠那一手往往正是对方回合：
+      // 立场必须按 u0.owner 算，跟着 st.turn 会把自家鼠送进敌人怀里（2026-10-16 修）
+      var me2 = (u0 && u0.owner) ? u0.owner : me;
+      var best = null, bestScore = -1e9;
+      for (var i = 0; i < st.board.length; i++) {
+        if (st.board[i]) continue;
+        if (g.isWater(i) && u0 && !g.isSwimmer(u0)) continue;
+        var d = 0, foe = g.other(me2);
+        for (var k = 0; k < st.board.length; k++) {
+          var e = st.board[k];
+          if (e && e.owner === foe) {
+            var q1 = g.rc(i), q2 = g.rc(k);
+            d += Math.abs(q1.r - q2.r) + Math.abs(q1.c - q2.c);
+          }
+        }
+        var score = d - danger(st, i, me2) * 20;
+        if (score > bestScore) { bestScore = score; best = i; }
+      }
+      return best === null ? { type: 'skip' } : { type: 'escape', to: best };
+    }
+    if (p.kind === 'chain') {
+      var w = st.board[p.cell];
+      var best2 = null, best2Score = 0;
+      for (var j = 0; j < p.targets.length; j++) {
+        var t = p.targets[j], victim = st.board[t];
+        if (!victim) continue;
+        var s = 20 + g.LEVEL[victim.kind] * 10 - danger(st, t, me) * 6 - (w ? g.LEVEL[w.kind] * 4 : 0);
+        if (s > best2Score) { best2Score = s; best2 = t; }
+      }
+      return best2 === null ? { type: 'skip' } : { type: 'move', from: p.cell, to: best2 };
+    }
+    return null;
+  }
+
+  // 把「所有合法动作 + 军师评分」都枚举出来（decide 与 rank 共用同一套评估）
+  // ---- 军师评分项（船长 2026-10-17：每一条倾向都能单独关掉）------------------
+  // 关掉哪条，军师就不拿那条倾向给候选打分——招数照旧列出来，只是评分回到中性。
+  var TERMS = [
+    { id: 'eat',     title: '吃子收益：能吃的先吃',        text: '吃子按对方的等级算收益' },
+    { id: 'danger',  title: '危险规避：别把子送到敌人嘴边', text: '落点被多少敌人盯着就扣多少分' },
+    { id: 'value',   title: '保值：等级高的子不轻动',      text: '要动的这只等级越高，扣分越多' },
+    { id: 'advance', title: '推进：主动往敌人身边压',      text: '离最近的敌人越近越加分' },
+    { id: 'once',    title: '一次性技能省着用',            text: '自爆/陨石/猛扑/狮王矢的门槛与机会成本' },
+    { id: 'thaw',    title: '敲冰：救自家被冰封的恐龙',    text: '撞自家冰龙优先' },
+    { id: 'reveal',  title: '掀牌探路',                    text: '暗牌给一点基础分（不知道是谁，翻开看看）' },
+    // 下面两条是「想一手」才看得出的补漏项——2026-10-17 擂台隔离实测（双方都只用军师榜第一名）：
+    //   hang 单开 = 77% 胜 · threat 单开 = 66% 胜 · 两条一起开 = 92% 胜（对照 18% / 32% / 7%）
+    { id: 'hang',    title: '补漏：走完别把子白挂在对方嘴里', text: '落子之后自己有子被吃、又没人能反吃回来，按等级扣分' },
+    { id: 'threat',  title: '压子：咬住对方的明牌',          text: '下一手能吃到对方已公开的子，按它的等级加分' }
+  ];
+  function allTerms(on) {
+    var o = {};
+    TERMS.forEach(function (t) { o[t.id] = !t.off; });
+    if (on && typeof on === 'object') {
+      TERMS.forEach(function (t) { if (typeof on[t.id] === 'boolean') o[t.id] = on[t.id]; });
+    }
+    return o;
+  }
+
+  // 棋力档也管「眼力」（船长 2026-10-17：50 局制、每级要拉开 70%）。
+  // 光靠「认真概率」拉不开台阶：实测 p 0.05↔0.15 只有 54%、0.25↔1.00 只有 56~66%。
+  // 低档索性少长一只眼——1 档什么都不看（乱走），2 档看吃子/子力/走位/危险/掀牌。
+  // 3 档 = 老深算（就是改造前那个满搜索深算）；4 档 = 新深算（同样九条眼力之外，再往前多算一层）。
+  // 注意：「补漏 hang」「压子 threat」这两条新眼力**故意不给本地 AI 的 3/4 档**——
+  // 实测（2026-10-17，50 局）同样满搜索下带上它们反而 40.0% : 58.0% 输给不带的老深算，
+  // 因为深搜本来就看得到还手。它们是给**AI 的军师榜**（rank()）用的，那条线不看 LEVEL_SIGHT。
+  var SIGHT7 = { eat: true, value: true, advance: true, once: true, thaw: true, reveal: true, danger: true };
+  var LEVEL_SIGHT = {
+    1: {},
+    2: SIGHT7,
+    3: SIGHT7,
+    4: SIGHT7
+  };
+  function sightTerms(n) {
+    var s = LEVEL_SIGHT[n];
+    if (!s) return null;
+    var o = {};
+    TERMS.forEach(function (t) { o[t.id] = !!s[t.id]; });
+    return o;
+  }
+
+  // 搜索内部（对手还手要试很多个局面）用这份「去掉补漏项」的开关：补漏项要真走一手才算得出来，
+  // 一局里被调用几百次会把每手拖到几十毫秒；而搜索本来就往前看，用不上它。
+  function fastTerms(T) {
+    if (!T || (!T.hang && !T.threat)) return T;
+    var o = {};
+    for (var k in T) o[k] = T[k];
+    o.hang = false; o.threat = false;
+    return o;
+  }
+
+  function scoreAll(st, me, last, T) {     // last = 上一手动作（用来惩罚原路往返）
+    T = allTerms(T);
+    var acts = [];
+    var mine = cellsOf(st, me);
+
+    mine.forEach(function (c) {
+      var u = st.board[c];
+      if (!u.revealed) return;
+
+      g.skillsFor(st, c).forEach(function (sk) {
+        if (sk.id === 'blast') {
+          // 船长 2026-10-17：自爆值不值，只看「这一下真能打死谁」，不看对方等级和
+          // （5.5 伤害打 7 级狮、8 级象是白送一只豹）
+          var pv = g.previewAction(st, { type: 'skill', cell: c, skill: 'blast' });
+          if (pv.foeKills > 0 || !T.once) acts.push({ action: { type: 'skill', cell: c, skill: 'blast' },
+                                           score: 40 + pv.foeGain * 14 - pv.ownLoss * 16 });
+        }
+        if (sk.id === 'meteor') {
+          // 陨石砸不碎暗牌（只有已公开的会死），自己这条 7.5 级的命也要算成本
+          var pv2 = g.previewAction(st, { type: 'skill', cell: c, skill: 'meteor' });
+          var must = g.LEVEL[u.kind] + 4;      // 搭进去的命 + 一局只有一次的代价
+          if (pv2.foeGain >= must && pv2.foeGain > pv2.ownLoss || !T.once)
+            acts.push({ action: { type: 'skill', cell: c, skill: 'meteor' },
+                        score: 30 + pv2.foeGain * 10 - pv2.ownLoss * 12 });
+        }
+        if (sk.id === 'pounce') {
+          var q0 = g.rc(c);
+          for (var dq = 0; dq < 4; dq++) {     // 猛扑只能打上下左右相邻格，斜角不算
+            var rq = q0.r + g.DIR8[dq].dr, cq = q0.c + g.DIR8[dq].dc;
+            if (rq < 0 || rq > 4 || cq < 0 || cq > 4) continue;
+            var iq = rq * 5 + cq, eq = st.board[iq];
+            if (!eq || !eq.revealed) continue;
+            if (eq.owner === me) {
+              // 冰封中的恐龙是中立困兽：自己的猛扑也能砸它，已经裂了一层就值得补一掌
+              if (eq.kind === 'dino' && eq.frozen) {
+                acts.push({ action: { type: 'skill', cell: c, skill: 'pounce', target: iq }, score: 26 + (eq.frozenHits === 1 ? 42 : 6) });
+              }
+              continue;
+            }
+            if (eq.kind === 'dino' && eq.frozen) {   // 对面的冰龙同样可以猛扑补刀
+              acts.push({ action: { type: 'skill', cell: c, skill: 'pounce', target: iq }, score: 20 + (eq.frozenHits === 1 ? 46 : 4) });
+              continue;
+            }
+            if (g.LEVEL[eq.kind] <= 7) {
+              // 一局只有一次：走过去就能吃掉的（比如一只 1 级鼠）不值得动用猛扑
+              var sc = 50 + g.LEVEL[eq.kind] * 14;
+              var plain = g.moveTargets(st, c).some(function (x) { return x.to === iq && x.kind === 'eat'; });
+              if (plain && T.once) sc -= 45 + g.LEVEL[eq.kind] * 14 - g.LEVEL[u.kind] * 3;
+              acts.push({ action: { type: 'skill', cell: c, skill: 'pounce', target: iq }, score: sc });
+            }
+          }
+        }
+        if (sk.id === 'freeze') {
+          cellsOf(st, g.other(me)).forEach(function (i) {
+            var e = st.board[i];
+            if (!e || !e.revealed) return;
+            var s = g.LEVEL[e.kind] * 4 + (e.used && e.used.volley === false ? 6 : 0);
+            acts.push({ action: { type: 'skill', cell: c, skill: 'freeze', target: i }, score: s });
+          });
+        }
+        if (sk.id === 'kunwave') {
+          // 十字波涛：上下左右四条臂各自穿到底（2026-10-18 从「周身一格」改成整臂），每格 6.5
+          var pvk = g.previewAction(st, { type: 'skill', cell: c, skill: 'kunwave' });
+          var gain = pvk.foeGain - pvk.ownLoss * 1.2;
+          if (gain > 0 || !T.once) acts.push({ action: { type: 'skill', cell: c, skill: 'kunwave' },
+                                               score: 26 + gain * 12 });
+        }
+        if (sk.id === 'volley' || sk.id === 'shock') {
+          var isV = (sk.id === 'volley');
+          for (var d = 0; d < g.DIR8.length; d++) {
+            var line = ray(st, c, g.DIR8[d]);
+            var g1 = 0, friendly = false;
+            for (var li = 0; li < line.length; li++) {
+              var e = st.board[line[li]];
+              if (!e) continue;
+              var dmg = isV ? 7 : 6.5;
+              if (isV) {
+                // 狮王矢不穿障（船长 2026-10-16 削弱）：只看第一个挡路的单位，暗牌挡箭
+                // 冰封中的恐龙是中立困兽，挡在箭路上就会被敲掉一层冰（不分敌我）
+                if (e.kind === 'dino' && e.frozen) {
+                  if (e.revealed) g1 += (e.owner === me ? 2.4 : 2.0) + (e.frozenHits === 1 ? 4.6 : 0);
+                  break;
+                }
+                if (e.owner === me) break;
+                // 打不动就别浪费一局一次的狮王矢（船长 2026-10-17）
+                if (e.revealed) {
+                  if (g.LEVEL[e.kind] <= dmg) g1 += g.LEVEL[e.kind] * 2;
+                  else if (T.once) g1 = -999;        // 打不动就别浪费一局一次的箭
+                  else g1 += 0.6;                    // 关掉这条倾向时，打不动也只算一点零头
+                }
+                break;
+              }
+              if (e.owner === me) { if (e.revealed) friendly = true; continue; }
+              if (!e.revealed) continue;
+              g1 += g.LEVEL[e.kind] <= dmg ? g.LEVEL[e.kind] * 2 : 0.6;
+            }
+            if (friendly) continue;
+            if (g1 <= 0) continue;
+            acts.push({ action: { type: 'skill', cell: c, skill: sk.id, dir: d }, score: (isV ? 30 : 24) + g1 * 9 });
+          }
+        }
+      });
+    });
+
+    // 移动 / 吃子
+    var myEle = hasRevealed(st, me, 'elephant');       // 我的象在场 → 对方的鼠就是眼中钉
+    mine.forEach(function (c) {
+      var u = st.board[c];
+      if (!u.revealed || u.moves <= 0) return;      // 行动力用光 / 被禁锢的不能动
+      g.moveTargets(st, c).forEach(function (t) {
+        var score;
+        if (t.kind === 'eat') {
+          var victim = st.board[t.to];
+          score = (T.eat ? 45 + g.LEVEL[victim.kind] * 14 : 20)
+                - (T.danger ? dangerCost(st, t.to, me, u) : 0)
+                - (T.value ? g.LEVEL[u.kind] * 3 : 0);
+          // 1 级鼠本身不值钱，但它攥着我象的命——清掉它比吃一只猫还值
+          if (T.eat && victim.kind === 'mouse' && victim.owner !== me && myEle) score += 36;
+          // 我的鼠咬死对方的象：全场最赚的一笔
+          if (T.eat && u.kind === 'mouse' && victim.kind === 'elephant') score += 40;
+        } else if (t.kind === 'thaw') {
+          var icy = st.board[t.to];
+          score = T.thaw ? 22 + (icy.frozenHits === 1 ? 34 : 4) : 5;   // 敲自家冰龙
+          if (T.danger) score -= danger(st, t.to, me) * 2;
+        } else {
+          score = 2 + Math.random() * 2
+                - (T.danger ? dangerCost(st, t.to, me, u) : 0)
+                + (T.advance ? (4 - nearestFoe(st, t.to, me)) * 2.6 : 0);
+          if (last && last.type === 'move' && last.from === t.to && last.to === c) score -= 12;
+        }
+        acts.push({ action: { type: 'move', from: c, to: t.to }, score: score });
+      });
+    });
+
+    // 掀牌：连自己也不知道哪张是自己的（背面藏着归属），所以对全部暗牌一视同仁
+    for (var rc2 = 0; rc2 < 25; rc2++) {
+      if (!st.board[rc2] || st.board[rc2].revealed) continue;
+      acts.push({ action: { type: 'reveal', cell: rc2 }, score: T.reveal ? 6 + Math.random() * 3 : 0.5 + Math.random() });
+    }
+
+    // ---- 补漏项（hang / threat）：真走一手再看「走完之后」的画面，只给榜上靠前的手补算
+    if (T.hang || T.threat) {
+      var base = acts.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, REFINE);
+      var hb = T.hang ? hangOf(st, me) : 0, tb = T.threat ? threatOf(st, me) : 0;
+      base.forEach(function (a) {
+        var after = step(st, a.action, me);
+        if (!after) return;
+        if (T.hang) a.score -= HANG_W * (hangOf(after, me) - hb);
+        if (T.threat) a.score += THREAT_W * (threatOf(after, me) - tb);
+      });
+    }
+
+    return acts;
+  }
+
+  // ---- 深算档（船长 2026-10-17 要的第三档）-------------------------------
+  // 位置评估（站在 me 的角度）：明牌按等级算，暗牌按经验期望估，冰龙等于不存在；
+  // 站在对方刀口上的自家子扣分；深海巨兽将临时，十字上的自家子也要躲。
+  function evalState(st, me) {
+    var s = 0, i, u;
+    var foe = g.other(me);
+    // 象的命攥在对方的鼠手里；鼠又是换象的宝贝——这两个得互相打折/加价
+    var myMouseLive = hasRevealed(st, me, 'mouse') || !!(st.escaped && st.escaped.unit && st.escaped.unit.owner === me && st.escaped.unit.kind === 'mouse');
+    var foeMouseLive = hasRevealed(st, foe, 'mouse') || !!(st.escaped && st.escaped.unit && st.escaped.unit.owner === foe && st.escaped.unit.kind === 'mouse');
+    // 暗牌里可能还藏着鼠：对方还有几张暗牌，就按概率给象打一点折（两边一样对待）
+    var foeHidden = 0, myHidden = 0;
+    for (i = 0; i < 25; i++) {
+      u = st.board[i];
+      if (!u || u.revealed) continue;
+      if (u.owner === foe) foeHidden++; else myHidden++;
+    }
+    for (i = 0; i < 25; i++) {
+      u = st.board[i];
+      if (!u) continue;
+      var v = u.revealed ? u.level : 2.2;
+      if (u.revealed && u.kind === 'dino' && u.frozen) v = 0;      // 冰龙不算兵力
+      if (u.revealed && u.kind === 'mouse') {
+        if (u.owner === me && hasRevealed(st, foe, 'elephant')) v += 2.6;   // 我的鼠能咬掉对方的象
+        if (u.owner === foe && hasRevealed(st, me, 'elephant')) v += 2.6;
+      }
+      s += (u.owner === me ? v : -v);
+      if (u.revealed && u.owner === me && danger(st, i, me) > 0) s -= u.level * 0.55;
+    }
+    var toWhale = g.pliesToWhale(st);
+    if (toWhale > 0 && toWhale <= 2) {
+      for (i = 0; i < g.WHALE_CELLS.length; i++) {
+        u = st.board[g.WHALE_CELLS[i]];
+        if (u && u.owner === me) s -= u.revealed ? u.level * 0.5 : 1.0;
+      }
+    }
+    // 正在逃生的鼠还没落位，但它活着（吃鼠那一手不能当成已消灭）
+    var esc = st.escaped && st.escaped.unit;
+    if (esc) s += (esc.owner === me ? esc.level : -esc.level);
+    if (st.over) s += (st.result === me ? 500 : (st.result === 'draw' ? 0 : -500));
+    return s;
+  }
+
+  // 把一手真的走掉（顺带把「吃鼠等落点 / 狼连吃」这类子决策按最合理的方式结掉）
+  function step(st, action, me) {
+    var res = null;
+    try { res = g.applyAction(st, action); } catch (e) { return null; }
+    if (!res || !res.ok) return null;
+    var after = res.state;
+    var pd = resolvePending(after, after.turn);
+    if (pd) {
+      var rr = null;
+      try { rr = g.applyAction(after, pd); } catch (e) { rr = null; }
+      if (rr && rr.ok) after = rr.state;
+    }
+    return after;
+  }
+
+  // 对手会怎么还手：用同一套局面评估（evalState）挑他自己最赚的一手
+  function bestReply(st, T, breadth) {
+    var foe = st.turn;
+    var list = scoreAll(st, foe, null, fastTerms(T));
+    if (!list.length) return null;
+    list.sort(function (a, b) { return b.score - a.score; });
+    var best = null, bestV = -1e9, tried = 0, seen = {};
+    for (var i = 0; i < list.length && tried < (breadth || 5); i++) {
+      var key = JSON.stringify(list[i].action);
+      if (seen[key]) continue;
+      seen[key] = 1; tried++;
+      var after = step(st, list[i].action, foe);
+      if (!after) continue;
+      var v = evalState(after, foe) + list[i].score * 0.004;   // 站在对手的角度看
+      if (v > bestV) { bestV = v; best = list[i].action; }
+    }
+    return best;
+  }
+
+  // 深算的搜索参数（擂台实测调出来的：宽度指我自己试几手，reply 指对手还手试几手，follow 指我再走试几手）
+  var SEARCH = { width: 20, widthBig: 14, reply: 10, follow: 8, reply2: 4, follow2: 3 };
+
+  // 电脑棋力：1~4 四档（界面滑杆 step=1）。每档两个旋钮——
+  //   p    = 这一手「认真走」的概率（认真 = 想两手的那套搜索）
+  //   noise= 不认真时，愿意在军师榜上挑多差的棋（越大越像乱走）
+  // 光靠「搜索/不搜索」分档会出现断崖（实测 3→4 档 83%、4→5 档 82% 一边倒），
+  // 用「认真走的比例」分档，楼梯才均匀。
+  // 2026-10-17 重新校准（补漏/压子两条倾向默认打开后，贪心变强、老参数把台阶压平了：
+  // 旧参数下 2 档 vs 3 档 47.5%:47.5% 打平）——新参数实测每级约 20 个点：
+  //   1→2 60.8% · 2→3 59.0%（p 0.30→0.10）· 3→4 58.0%（p 0.65→0.50）
+  // 2026-10-17 二次校准（船长：50 局制、每级要 70%）：p 这个旋钮拧到头也只有 55~66%，
+  // 所以四档改用四种不同的旋钮：① 眼力（LEVEL_SIGHT）② 认真概率 p ③ 随手噪声 noise
+  // ④ 搜索深度 depth（1 = 我走→他还手；2 = 我走→他还手→我再走）
+  var POWER = {
+    1: { p: 0.00, noise: 34, depth: 1 },
+    2: { p: 0.10, noise: 12, depth: 1 },
+    3: { p: 1.00, noise: 0, depth: 1 },
+    4: { p: 1.00, noise: 0, depth: 2 }
+  };
+
+  function tune(d) {
+    var n = Math.round(Number(d));
+    if (!isFinite(n)) n = 3;
+    n = Math.max(1, Math.min(4, n));
+    var t = POWER[n];
+    return {
+      d: n,
+      p: envNum('WHALE_P' + n, t.p),
+      noise: envNum('WHALE_NOISE' + n, t.noise),
+      depth: t.depth || 2
+    };
+  }
+
+  // 轮流往下看：depth = 还允许再走几手（1 = 对手还一手，2 = 我再一手…），lv 是层号（选宽度用）
+  function minimax(st, me, T, depth, lv, S) {
+    if (st.over || depth <= 0) return evalState(st, me);
+    S = S || SEARCH;
+    var mover = st.turn;
+    var n = (mover === me) ? (lv <= 1 ? S.follow : S.follow2)
+                           : (lv <= 1 ? S.reply : S.reply2);
+    var list = topN(st, mover, T, n);
+    if (!list.length) return evalState(st, me);
+    var mine = (mover === me);
+    var best = mine ? -1e9 : 1e9;
+    for (var i = 0; i < list.length; i++) {
+      var a = step(st, list[i].action, mover);
+      if (!a) continue;
+      var v = minimax(a, me, T, depth - 1, lv + 1, S) + list[i].score * 0.004;
+      if (mine) { if (v > best) best = v; }
+      else { if (v < best) best = v; }
+    }
+    return (best === -1e9 || best === 1e9) ? evalState(st, me) : best;
+  }
+
+  // 军师榜的前 n 手（按分数排序、去掉重复动作）
+  function topN(st, me, T, n) {
+    var list = scoreAll(st, me, null, T);
+    list.sort(function (a, b) { return b.score - a.score; });
+    var out = [], seen = {};
+    for (var i = 0; i < list.length && out.length < n; i++) {
+      var key = JSON.stringify(list[i].action);
+      if (seen[key]) continue;
+      seen[key] = 1;
+      out.push(list[i]);
+    }
+    return out;
+  }
+
+  // 深算：把自己的前十几手都真走一遍，再让对手用同一套评估还一手，比「还手之后」的场面
+  // deep=2 时还要再替自己想一手（我走→他走→我再走），这样才不会走出「看着赚、下一手就被吃」的棋
+  function pickDeep(st, me, acts, T, deep, S) {
+    S = S || SEARCH;
+    var best = acts[0], bestV = -1e9, seen = {}, tried = 0;
+    var width = (acts.length > 400) ? S.widthBig : S.width;   // 候选太多时少试几个，别把每手拖到太久
+    for (var i = 0; i < acts.length && tried < width; i++) {
+      var key = JSON.stringify(acts[i].action);
+      if (seen[key]) continue;
+      seen[key] = 1;
+      tried++;
+      var after = step(st, acts[i].action, me);
+      if (!after) continue;
+      var v = (deep <= 0) ? evalState(after, me) : minimax(after, me, T, deep, 1, S);
+      v += acts[i].score * 0.005;                           // 同分时还是听军师的
+      if (v > bestV) { bestV = v; best = acts[i]; }
+    }
+    return best;
+  }
+
+  // 对手会怎么还手（旧版：只看他自己的军师评分）——留着给外部/测试用
+  function bestStatic(st, T) {
+    var list = scoreAll(st, st.turn, null, T);
+    if (!list.length) return null;
+    var best = list[0];
+    for (var i = 1; i < list.length; i++) if (list[i].score > best.score) best = list[i];
+    return best.action;
+  }
+
+  function decide(st, level, opts) {
+    var me = st.turn;
+    var last = (opts && opts.type) ? opts : ((opts && opts.last) || null);
+    var T = allTerms(opts && opts.terms);
+    var num = (level !== null && level !== undefined && level !== '' && isFinite(Number(level)))
+      ? Math.max(1, Math.min(4, Math.round(Number(level)))) : null;
+    if (num) { var sg = sightTerms(num); if (sg) T = sg; }   // 低档少长一只眼（见 LEVEL_SIGHT）
+    var pend = resolvePending(st, me);
+    if (pend) return pend;
+
+    var acts = scoreAll(st, me, last, T);
+    if (!acts.length) return { type: 'skip' };
+    acts.sort(function (a, b) { return b.score - a.score; });
+    // 难度滑杆（1~4，数字或数字串）：按「这一手认真走的概率」决定是搜一把还是随手挑
+    if (num) {
+      var P = tune(num);
+      if (Math.random() < P.p) return pickDeep(st, me, acts, T, P.depth, SEARCH).action;
+      var pool = acts.filter(function (a) { return a.score >= acts[0].score - P.noise; });
+      return (pool.length > 1 ? pool[Math.floor(Math.random() * pool.length)] : acts[0]).action;
+    }
+    if (level === 'careful') {
+      // 内部档「认真候选」：一半手认真想一层（老深算），一半手直接听军师——用来填「随意↔深算」之间的断层
+      if (Math.random() < 0.5) return pickDeep(st, me, acts, T, 1).action;
+      return acts[0].action;
+    }
+    if (level === 'deep' || level === 'deep2' || level === 'deep3' || level === 'deep4') {
+      // 层数：deep2 = 我走→他走；deep/deep3 = 我走→他走→我再走；deep4 = 再让他还一手
+      var need = level === 'deep2' ? 1 : (level === 'deep4' ? 3 : 2);
+      return pickDeep(st, me, acts, T, need).action;
+    }
+    var noise = level === 'hard' ? 0 : 12;      // 简单模式：在最优附近随机挑
+    var top = acts.filter(function (a) { return a.score >= acts[0].score - noise; });
+    return top[Math.floor(Math.random() * top.length)].action;
+  }
+
+  // 给外部用（AI 桥）：返回排序好的全部候选 [{action, score}]，让军师把好棋挑出来
+  function rank(st, opts) {
+    var me = st.turn;
+    var T = allTerms(opts && opts.terms);
+    var pend = resolvePending(st, me);     // 鼠逃生 / 狼连吃这种子决策优先，没得挑
+    if (pend) return [{ action: pend, score: 999 }];
+    var acts = scoreAll(st, me, (opts && opts.last) || null, T);
+    acts.sort(function (a, b) { return b.score - a.score; });
+    return acts;
+  }
+
+  return { decide: decide, rank: rank, danger: danger, cellsOf: cellsOf, tune: tune,
+           // levels 留作兼容（界面已改成 0~5 的滑杆，不再按档名循环）；deep2/deep3/deep4 是擂台内部档
+           evalState: evalState, levels: ['normal', 'hard', 'deep'],
+           terms: TERMS, allTerms: allTerms, sightTerms: sightTerms };
+});
+
+</script>
+<script>window.__RULES_MD = "# 超能斗兽棋 · 规则书\n\n> 超能斗兽棋 · 24 张手搓卡牌 · 5×5 棋盘\n> 复刻自船长初中时用纸片自制的那个游戏。\n\n---\n\n## 一、棋盘与卡组\n\n- **棋盘 5×5**，正中央一格是**深水区**（空白区）。\n- **24 张卡牌**，12 种动物各一只，红蓝双方各 12 张。\n- **开局**：24 张牌**背面朝上**，**随机铺满**除深水区外的 24 格。\n  **连阵营也藏在背面** —— 所有牌的背面一模一样，看不出哪张是红、哪张是蓝，也看不出上下半区。\n  谁在哪、手里有什么，全靠掀。\n- **暗牌**不可移动、不吃子、不能作为吃子目标；只有掀开才激活。\n\n### 等级表\n\n| 等级 | 动物 | 等级 | 动物 |\n|------|------|------|------|\n| 1 | 🐭 鼠 | 5 | 🐆 豹 |\n| 2 | 🐱 猫 | 6 | 🐯 虎 |\n| 3 | 🐶 狗 | 6 | 🦅 鹏鸟 |\n| 3 | 🐧 企鹅 | 7 | 🦁 狮 |\n| 3.5 | 🐼 熊猫 | 7.5 | 🦕 恐龙 |\n| 4 | 🐺 狼 | 8 | 🐘 象 |\n\n另有 **🐳 鲲（7 级）**：不在开局卡池里，是**鹏鸟吃掉敌方企鹅后当场变出来的特殊变种**（详见第四节）。\n\n---\n\n## 二、一回合能做什么\n\n每回合**二选一**：\n\n1. **掀牌** —— 掀开棋盘上**任意一张暗牌**（不分红蓝，因为你看不出来）。\n   - 掀到**自己的**：亮出并激活，本回合结束。\n   - 掀到**对方的**：这只动物归对方、亮出并归对方指挥，**本回合照样结束**（摸牌有风险，撞上就认了）。\n2. **行动** —— 指挥自己一只**已公开**的动物移动或使用技能。\n\n每种动物每回合有 1 点行动力（不叠加、不留存）。\n\n---\n\n## 三、吃子规则\n\n- 相邻（上下左右）的**已公开**敌方动物，等级 **≥** 对方即可吃掉。\n- **等级相同时同归于尽**（双方都死；鼠的「逃出生天」此时不触发）。\n  - 换句话说，**红蓝两方的同一种动物撞上，必定同归于尽**（鼠撞鼠、象撞象……十二种都算）。\n  - 跨种相撞也能撞出同级，全表只有这几组：狗(3) × 企鹅(3)、虎(6) × 鹏鸟(6)、熊猫(7.5) × 恐龙(7.5)。\n    熊猫升级后永远停在 x.5 刻度上，所以跟别的动物很难同级（两边熊猫都长到同一级时同样同归于尽）。\n  - 技能造成的伤害（自爆、猛扑、狮王矢、冲击波、十字波涛、陨石）**不算**同归于尽：那是单方面的攻击，目标扛得住就原地不动。\n- **鼠可以吃象**（以小博大）。\n- **深水区**：只有鼠、企鹅和鲲能进去或停留，其他动物不能停在深水区；**岸上的动物也吃不到水里的它**（水里的鼠只能等企鹅或鲲下水来咬）。\n\n---\n\n## 四、动物的技能\n\n| 动物 | 技能 |\n|------|------|\n| 🐭 **鼠** | **逃出生天**：被吃掉时不算真死，立即免费行动一次，只能落到空白格。每局一次，**不占回合**。落点由**鼠的主人**自己点——哪怕是对方回合把它吃掉的。另有「鼠吃象」。 |\n| 🐱 **猫** | **侧击**：上下左右之外还能**斜着**行动与吃子（一共 **8 个方向**）。 |\n| 🐶 **狗** | **疾行**：一次可以走两格（第二格也可以吃）。 |\n| 🐺 **狼** | **连吃**：吃掉一个后，检查四周四格还有没有能吃的已公开目标，由你决定是否继续吃。**不占回合**。 |\n| 🐆 **豹** | **自爆**：以自身为中心 3×3 内所有已公开单位受到 **5.5** 伤害，自身阵亡。占回合，每局一次。 |\n| 🐯 **虎** | **猛扑**：对相邻已公开目标发动一次威力 **7** 的攻击。每局一次，占回合。**也可以猛扑冰封中的恐龙**（不分敌我），等于隔空帮它敲掉一层冰（船长 2026-10-17 裁定）。 |\n| 🦁 **狮** | **狮王矢**：沿一条直线远程发射威力 **7** 的箭，**只命中第一个挡路的单位**——那是一个已公开的敌方单位就挨箭；若是**暗牌或自己人，箭就被挡下来**（谁都不掉血）。**唯一例外：挡在箭路上的是冰封中的恐龙，这一箭就会敲掉它一层冰（不分敌我）**（船长 2026-10-17 裁定）。每局一次，占回合。（2026-10-16 削弱：原先能贯穿整条直线，太超模） |\n| 🐘 **象** | **巨力**：可以翻越紧邻的一格障碍，落在障碍后方的格子。 |\n| 🐧 **企鹅** | **冰封**：指定一个已公开敌方单位，令其下一回合被禁锢（效果公开可见，被禁锢期间可被吃）。每局一次，**不占回合**。 |\n| 🐼 **熊猫** | **成长 · 吃啥补啥**：每吃掉一个动物，等级 **+1**，并**永久获得它「被动、能反复用」的能力**（吃猫得侧击、吃狗得疾行、吃狼得连吃、吃象得巨力、**吃鹏鸟得翱翔**）。最高升到 **8.5 级**，吃子规则与他人相同。学到的能力是**叠加**的、不是替换的：侧击 + 疾行 = 8 个方向各走两格，学了翱翔之后**斜吃、两格吃、翻越照样都在**（飞行只是多出来的一种走法，一回合仍然只动一次）。**一次性的招数一概学不到**（船长 2026-10-16 裁定：只学被动、能反复用的能力）——豹的自爆、虎的猛扑、狮王矢、企鹅的冰封，以及恐龙的冲击波/陨石，吃了这些都只涨等级。 |\n| 🦅 **鹏鸟** | **翱翔**：可以飞往任意空位，无视障碍；但落点必须是空格，**不能飞过去吃**。不过**贴身四格照常吃** —— 它只是\"飞着不吃东西\"，站在旁边照样下嘴（船长 2026 裁定）。**它吃掉敌方企鹅后会当场化身为鲲**（船长 2026-10-18 追加）。 |\n| 🐳 **鲲** | **特殊变种**：鹏鸟吞下**敌方**企鹅后，当场变成鲲，等级从 6 **升到 7**。开局卡池里没有它。**失去翱翔**（不能再飞，只能上下左右走一格），换来**会游泳**——可以进中央深水区（水里的它只有鼠、企鹅、鲲咬得到）。**十字波涛**：以自身为中心，上下左右**四条臂各自一路穿到棋盘边缘**，臂上每个目标受 **6.5** 伤害；扛得住的已公开目标与暗牌会被沿各自所在方向击退（机制与恐龙冲击波一致）。每局一次，占回合。7 级意味着它吃不掉狮、恐龙、象，反过来这三样也吃不掉它（同级同归于尽）。 |\n| 🦕 **恐龙** | **冰封之躯**：初次翻开时处于冰冻状态，**冰冻期间无敌**——任何攻击都杀不死它，只能一层层敲冰：两次「等级 ≥7 的攻击或威力 ≥7 的技能」才能解冻（第一击裂开冰层，第二击解冻；解冻那一下不结算伤害）。**冰封期间它是「中立困兽」**：不算任何一方的兵力，**双方**也都打得着它——己方等级 ≥7 的动物可以走过去敲冰，敌人的撞击同样只算敲冰（大象的撞击是解封恐龙，而不是连冰块吞下），虎的猛扑与狮王矢也能敲（不分敌我）（船长 2026-10-16 / 10-17 裁定）。<br>**冲击波**：选一个方向，该方向所有目标受到 **6.5** 伤害；打不死的目标（等级高于 6.5 的、以及**冰封中的恐龙**）与未公开的牌被击退到该方向最远处。每局一次，占回合。<br>**陨石降临**：自杀，并对周围 3×3 造成威力 **8.5** 的伤害。每局一次，占回合。**这是冰龙的唯一破例**：8.5 的威力大到连冰层带恐龙一起砸碎（船长 2026-10-16 裁定：陨石有它自己的逻辑，予以保留）。 |\n\n---\n\n## 五、伤害与击退\n\n- 技能伤害 **≥** 目标等级 → **击杀**；**不够就什么也不发生**（目标扛住了就是扛住了，原地不动，也不会被推开）。**例外：恐龙冲击波与鲲的十字波涛**——扛得住的照样被击退。\n- **会「击退」的只有两种力量**：恐龙冲击波（6.5，沿一个方向一路推到底）与鲲的十字波涛（6.5，上下左右各自推出）。它们打不动的高等级目标、以及未公开的牌，会被推走（船长裁定：别的技能没打穿就自己白搭，不推人）。\n- 未公开的牌不会被任何技能打伤，只会被冲击波 / 十字波涛**击退**。\n- **冰封中的恐龙也算「扛住」**：它无法被击杀，所以冲击波与十字波涛**推得动它**——整块冰被推着走，冰层不裂（破冰仍要威力 ≥7）。击退路上遇到深水，非泳者会停在岸边。\n- 被击退的单位沿该方向一直退到最远的空格；贴着边背靠棋子就退不动了。\n- **禁锢**（企鹅冰封）期间的动物不能行动，但可以被吃。\n- 每只动物每回合只有 **1 点行动力**：动过、或放过占回合的技能之后，同一回合不能再指挥它。\n\n---\n\n## 六、胜负\n\n- 一方动物**全灭**，对方获胜。\n- **冰封中的恐龙是「中立困兽」**（船长 2026-10-17 定案）：它**不替任何一方算作兵力**，也**两边的爪子都够得着**（谁的猛扑、谁的箭都能敲它的冰）。所以一方场上只剩冰封恐龙、别的全没了，就等于**全灭判负**；双方都只剩冰龙则**平局**。\n- 双方同时清零 → **平局**。\n- 一方无子可动时自动跳过；若双方**连续 20 手都没有实质进展**（没掀牌、没吃子、没放技能），先看有没有「**无人可挡**」的动物——只有一方握有对方任何动物都吃不掉的动物时，直接判该方胜（躲下去改变不了结局）；双方都没有（或互有克制）才按场上等级总和决算，避免无限踱步。判断只按等级与鼠吃象特例，**不把技能算进杀伤手段**（船长 2026-10-18 定）。冰封中的恐龙按「**中立困兽**」处理：两边都不把它算进决算——它既不算战力，也不算「无人可挡」（船长裁定：不解封是它自己的决策问题，决算不替它兜底）。\n\n---\n\n## 七、本复刻版的补充裁定\n\n这些是原规则书里没写清、由复刻时补定的部分：\n\n1. **阵营隐藏**（船长 2026 年追加）：开局红蓝 12+12 张混在一起随机铺满全盘，背面完全相同，\n   连「哪块是红方地盘」都不存在。掀到对方的牌，该牌归对方并公开，本回合结束。\n2. **中央深水区**只有鼠、企鹅和鲲能进（沿用经典斗兽棋「鼠可入水」，给企鹅一个身位；鲲是鹏鸟变的，既然\"北冥有鱼\"，它当然下得水）。\n3. **伤害判定**统一为「伤害 ≥ 等级即击杀」。**击退**只有**恐龙冲击波**与**鲲的十字波涛**会带（两者都是 6.5 伤害，机制同源）；其他技能伤害不够时就什么也不发生（船长的裁定：别人这么搞等于自杀）。\n4. **恐龙解冻**需要两次达标攻击，解冻当次不结算伤害；**己方等级 ≥7 的动物也能敲冰**（一次一层、占回合，纯帮忙不扣血），**虎的猛扑、狮王矢同样能给冰龙敲一层**（船长 2026-10-17 补充：猛扑要相邻；狮王矢只要冰龙挡在箭路上就行；两者都不分敌我）。**冰冻期间恐龙是无敌的**：敌方任何动物（包括大象）撞上来都只算敲掉一层冰、自己留在原地，绝不会把它连冰块一起吞掉。**唯一破例是恐龙自己的陨石降临**：8.5 威力连冰带龙一起砸碎（船长 2026-10-16 裁定）。\n5. **同级相撞**双方都死，鼠的逃出生天不触发。\n6. **连吃 / 逃出生天 / 企鹅冰封**不占回合；**自爆 / 猛扑 / 狮王矢 / 冲击波 / 十字波涛 / 陨石降临**占回合。\n7. 开局满盘（24 张牌铺满 24 格），因此开局阶段主要靠掀牌，吃子腾出空位后才能走位。\n8. 无子可动时自动跳过；双方**连续 20 手没有实质进展**（未掀牌 / 未吃子 / 未放技能）时，先判「无人可挡」（只有一方握有对方吃不掉的动物 → 该方胜；只看等级与鼠吃象，不算技能），否则按场上等级总和决算（冰封的恐龙两边都不算，按中立困兽处理）。\n9. 电脑对手不知道自己掀的是谁的牌（和人类一样瞎掀），也不会偷看暗牌。\n10. **2026-10-16 三条新裁定**：①**陨石降临是冰龙的唯一破例**——8.5 威力连冰层带恐龙一起砸碎（陨石有它自己的逻辑，保留）；②**巨兽天降不夺暗牌的命**——十字里的暗牌被拍得退无可退时留在原地，不会死；③**熊猫只学被动、能反复用的能力**——吃鹏鸟真的会翱翔（能飞任意空位），吃猫/狗/狼/象照旧；而**一次性的招数一概学不到**：豹的自爆、虎的猛扑、狮王矢、企鹅的冰封、恐龙的冲击波/陨石，吃了这些只涨等级（船长 2026-10-16 定原则、2026-10-17 补齐到豹/虎/狮/企鹅）。\n11. **2026-10-18「鲲」**（船长追加）：鹏鸟吃掉**敌方**企鹅后当场化身为鲲——等级升到 7、失去翱翔、能入深水、多一记「十字波涛」（十字四臂各一路穿到底，臂上每个目标 6.5 伤害 + 同源击退，一局一次、占回合）。同一天把恐龙冲击波的伤害从 6.75 调到 **6.5**，与十字波涛对齐。这两项都不改变任何击杀判定（能扛住 6.5 的也就是原来扛得住 6.75 的那批，最高可杀等级仍是 6），纯属数值统一。\n12. **2026-10-18「十字波涛放大」**（船长二次裁定）：十字波涛的范围从「周身上下左右各**一格**」改成「上下左右**四条臂各自穿到棋盘边缘**」，臂上每一个单位都吃 6.5、都按自己所在方向被击退。理由：鲲是「吃掉企鹅才换来、一局一次、占回合」的变身奖励，只打四格配不上它；改成整条十字后，它和恐龙冲击波的分工是「恐龙打一条线、鲲打一个十字」，鲲强在覆盖，弱在同样怕 7 级以上扛住者。\n13. **2026-10-18「击退的通则」**（船长三次裁定）：只有冲击波与十字波涛这两个技能带位移，而它们推得动的只有两类东西——「**未公开的牌**」和「**打不死的目标**」。冰封恐龙属于后者：它压根无法被击杀，所以 6.5 的冲击波与十字波涛都能把它整块冰推走（冰层不裂，破冰仍要 ≥7）。这条把「击退」从「附带效果」扶正为「对不可击杀者的处理方式」。\n14. **2026-10-18「翱翔是叠加，不是替换」**（船长裁定 · 改的是实现）：熊猫学会翱翔之后，飞行只是**多出来的一种走法**——侧击的斜吃、疾行的两格吃、巨力的翻越照旧有效，一回合仍然只动一次。旧实现把翱翔写成了一条**直接 `return` 的互斥分支**，会把整个走法枚举短路，于是熊猫吃下鹏鸟反而从「8 方向两格吃」退化成「4 方向一格吃」——**吃一只鸟反倒变弱**，与本节第 10 条「永久获得」的语义冲突。现已改成「先枚举地面走法、再追加飞行空格（同一格不重复报）」；鹏鸟本身的行为逐条不变（它没有侧击/疾行/巨力，四条边的走法与吃法本来就等于通用循环）。\n15. **2026-10-18「决算先判无人可挡」**（船长反馈 · 修的是判决）：船长遇到一局，对方能处理恐龙的动物都被吃光了，剩下靠鹏鸟飞来飞去硬撑到 20 手决算，旧规则「比等级总和」反而让这只鸟加上一堆残子把必败翻成了胜。现在 20 手僵持时**先判「无人可挡」**：一方场上存在对方任何动物都吃不掉的动物（按等级与鼠吃象特例算；对方的暗牌按\"可能有威胁\"保守处理），而对方没有 → 直接判该方胜，文案会点名「哪只动物无人可挡」。双方都有或都没有，才回到等级总和；同时冰封的恐龙不再计入等级总和（与第 93 行「不替任何一方算作兵力」对齐，旧实现漏算了这一条）。\n\n    **同条补充（船长 2026-10-18 当天裁定）**：**冰封中的恐龙是「中立困兽」**，决算里**两边都不算**——它既不计入等级总和，也不参与「谁吃得掉谁」的判断（既不当护身符，也不当软肋）。所以「象 8 + 龙 7.5 对 狮 7 虎 6 鼠 1 豹 5」这一局：鼠咬得动象、咬不动解封的龙 → 只有龙无人可挡，判红方胜；但若龙还冻着，红方就只剩一只被鼠盯着的象（**鼠吃象**是特例，1 级鼠能咬死 8 级象），双方都无无敌单位，退回总和（红 8 / 蓝 19）判蓝方胜——**不解封龙是自己的决策问题，决算不替它兜底**。「无人可挡」只按等级与鼠吃象特例算，**不引入技能**（陨石炸得死象，但决算不认这一层）；而「象 8 对龙 7.5」这种双方都能杀死对方的局面，龙吃不动象 → 判象无人可挡，同样是红胜。\n\n---\n\n---\n\n## 八、深海巨兽天降（可开关）\n\n深水区不只有鼠、企鹅和鲲了 —— **每隔一段时间，中央会钻出一只 9 级的深海巨兽**，一巴掌把十字范围拍平。\n\n- **范围**：中央深水区那一格，加上它的上下左右，一共 5 格。\n- **节奏**：**第 10 回合**钻出来第一次，之后**每 10 回合**一次 —— 也就是第 10、20、30、40……手上准时冒头。\n- **效果**：\n  - 十字范围内的**已公开动物一律阵亡** —— 9 级比全场最高（熊猫顶格 8.5）还高，谁都扛不住，也不进「逃出生天」那一套。\n  - **背面朝上的牌不吃伤害**，只会被拍飞出这 5 格（优先落到离深水区最远的空位；实在没地方落就留在原地不动，这一掌不夺暗牌的命）。\n  - **冰封中的恐龙也只被拍飞**：解冻已经够折腾了，这一掌不夺命。\n  - 红蓝一视同仁 —— 谁站在十字上谁挨打，连巨兽自己站的那一格也一样。\n- **开关**：开局前可以在页面顶部把「巨兽天降」关掉，玩没有巨兽的对局；开局之后再点会重开一局。\n\n*这个机制是规则的调味料：满盘暗牌时它逼人散开，残局时它逼人别挤在中央。*\n\n---\n\n*规则由船长口述整理成册。*\n";</script>
+<script>
+/* 超能斗兽棋 · AI 接口（浏览器直连 OpenAI 兼容接口）
+ * 只用登录在这台浏览器里的配置，不经过任何服务器。
+ * 接口：window.BeastLLM = { load, save, ready, describe, askMove, askReview, test, DEFAULT_BASE, DEFAULT_MODEL }
+ */
+(function (root) {
+  'use strict';
+
+  var g = root.CaptainBeast;
+  var ai = root.CaptainAI;
+  var KEY = 'superbeast.llm';
+  var DEFAULT_BASE = 'https://api.deepseek.com';
+  var DEFAULT_MODEL = 'deepseek-chat';
+
+  // ---------------- 配置 ----------------
+  function load() {
+    try {
+      var c = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
+      return {
+        base: c.base || '',
+        model: c.model || '',
+        key: c.key || '',
+        useMove: c.useMove !== false,
+        useReview: c.useReview !== false
+      };
+    } catch (e) {
+      return { base: '', model: '', key: '', useMove: true, useReview: true };
+    }
+  }
+
+  function save(c) {
+    try { localStorage.setItem(KEY, JSON.stringify(c)); } catch (e) {}
+    return c;
+  }
+
+  function ready() {
+    var c = load();
+    return !!(c.key && (c.base || DEFAULT_BASE) && (c.model || DEFAULT_MODEL));
+  }
+
+  function endpoint(c) {
+    var base = String((c && c.base) || DEFAULT_BASE).replace(/\/+$/, '');
+    if (/\/chat\/completions$/.test(base)) return base;
+    return base + '/chat/completions';
+  }
+
+  function post(c, body, timeoutMs) {
+    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs || 45000) : null;
+    return fetch(endpoint(c), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + c.key },
+      body: JSON.stringify(body),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (r) {
+      return r.text().then(function (t) {
+        if (!r.ok) {
+          var msg = 'HTTP ' + r.status;
+          try { var j = JSON.parse(t); msg += ' · ' + ((j.error && (j.error.message || j.error)) || t.slice(0, 160)); }
+          catch (e) { msg += ' · ' + String(t).slice(0, 160); }
+          throw new Error(msg);
+        }
+        try { return JSON.parse(t); } catch (e) { throw new Error('接口返回的不是 JSON：' + String(t).slice(0, 160)); }
+      });
+    }).catch(function (e) {
+      if (e && e.name === 'AbortError') throw new Error('接口超时（没在限定时间内回话）');
+      if (e && e.message === 'Failed to fetch') {
+        throw new Error('连不上这个地址（网络、代理，或对方的接口不允许网页直接调用）');
+      }
+      throw e;
+    }).then(function (j) {
+      if (timer) clearTimeout(timer);
+      var m = j && j.choices && j.choices[0] && j.choices[0].message;
+      if (!m) throw new Error('接口没按 OpenAI 格式回话');
+      return m.content || '';
+    }, function (e) {
+      if (timer) clearTimeout(timer);
+      throw e;
+    });
+  }
+
+  function pickJson(text) {
+    var s = String(text || '').trim();
+    s = s.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+    var i = s.indexOf('{'), j = s.lastIndexOf('}');
+    if (i < 0 || j <= i) throw new Error('AI 没按格式回话：' + s.slice(0, 120));
+    try { return JSON.parse(s.slice(i, j + 1)); }
+    catch (e) { throw new Error('AI 回的话不是合法 JSON：' + s.slice(i, i + 160)); }
+  }
+
+  // ---------------- 局面 -> 文字 ----------------
+  function sideName(owner) { return owner === 'red' ? '红' : '蓝'; }
+
+  function cellName(i) {
+    var p = g.rc(i);
+    return '(' + (p.r + 1) + ',' + (p.c + 1) + ')';
+  }
+
+  function unitName(u) {
+    if (!u) return '';
+    return (u.level) + '级' + (g.NAME[u.kind] || u.kind);
+  }
+
+  function boardText(st) {
+    var lines = [];
+    for (var r = 0; r < 5; r++) {
+      var row = [];
+      for (var c = 0; c < 5; c++) {
+        var i = g.idx(r, c), u = st.board[i];
+        if (g.isWater(i)) row.push('水');
+        else if (!u) row.push('空');
+        else if (!u.revealed) row.push('暗');
+        else row.push(sideName(u.owner) + unitName(u) + (u.frozen ? '（冰）' : '') + (u.jailed ? '（禁）' : ''));
+      }
+      lines.push('第' + (r + 1) + '行：' + row.join(' | '));
+    }
+    return lines.join('\n');
+  }
+
+  function rosterText(st) {
+    var mine = [], theirs = [], ice = 0;
+    for (var i = 0; i < st.board.length; i++) {
+      var u = st.board[i];
+      if (!u || !u.revealed) continue;
+      var s = unitName(u) + cellName(i);
+      if (u.owner === st.turn) mine.push(s); else theirs.push(s);
+      if (u.frozen) ice++;
+    }
+    return '我方（' + sideName(st.turn) + '）：' + (mine.join('、') || '场上已公开的棋子全没了') + '\n' +
+           '敌方已公开：' + (theirs.join('、') || '一张都没掀开') + '\n' +
+           '轮到：' + sideName(st.turn) + '　第 ' + (st.ply + 1) + ' 手' +
+           (st.pending ? '　（有一手待处理）' : '');
+  }
+
+  var RULES = [
+    '5×5 棋盘，24 张牌暗牌铺满（除中央深水），红蓝各 12 张混在一起，背面一模一样。',
+    '每回合二选一：掀一张任意暗牌（掀到自己人→亮出激活，回合结束；掀到对方→该牌归对方、亮出，回合照样结束）；或指挥自己一只已公开动物移动/用技能。',
+    '吃子：上下左右相邻的已公开敌方动物，等级≥对方即可吃；同级同归于尽；鼠可以吃象；深水区只有鼠/企鹅/鲲能进，岸上动物吃不到水里。',
+    '暗牌不能动、不能吃、也不能被吃；掀牌有风险，掀到对方的牌等于送他一个棋子。',
+    '技能：鼠·逃出生天（被吃时免费落到空格）、猫·侧击（斜走斜吃）、狗·疾行（两格）、狼·连吃、豹·自爆、虎·猛扑、狮·狮王矢、象·巨力、企鹅·冰封、熊猫·吃啥补啥（吃被动本领、等级+1）、鹏鸟·翱翔（飞任意空位，落点必须空）、鲲（鹏鸟吃敌方企鹅后变身·十字波涛）、恐龙·冰封之躯/冲击波/陨石。',
+    '伤害≥目标等级即击杀，不够就没事。一方全灭判负；40 手无进展 / 双方无子可动按规则决算。',
+    '重要：你只能看到已公开的信息。暗牌可能是你的、也可能不是。掀牌是赌博，掀到对方的牌会直接送给对手。'
+  ].join('\n');
+
+  function historyText(st, n) {
+    var h = st.history || [];
+    if (!h.length) return '（还没走过棋）';
+    return h.slice(-(n || 10)).map(function (x) {
+      return '第' + x.ply + '手 ' + sideName(x.turn) + '：' + x.label;
+    }).join('\n');
+  }
+
+  // ---------------- 动作 -> 中文 ----------------
+  function describe(st, a) {
+    if (!a) return '（无效动作）';
+    if (a.type === 'reveal') return '掀开' + cellName(a.cell) + '的暗牌';
+    if (a.type === 'skip') return '跳过（不动）';
+    if (a.type === 'escape') return '鼠逃出生天 → ' + cellName(a.to);
+    var u = st.board[a.from];
+    var who = u ? (g.ICON[u.kind] || '') + unitName(u) + ' ' + cellName(a.from) : cellName(a.from);
+    if (a.type === 'move') return who + ' 走到 ' + cellName(a.to);
+    if (a.type === 'skill') {
+      var sk = g.SKILL_TEXT && g.SKILL_TEXT[a.skill];
+      var name = (sk && (sk.name || sk)) || a.skill;
+      var tail = '';
+      if (a.to !== undefined && a.to !== null) tail = ' → ' + cellName(a.to);
+      if (a.dir) tail = ' 方向 ' + a.dir;
+      if (a.target !== undefined && a.target !== null) tail = ' 目标 ' + cellName(a.target);
+      return who + ' 使用「' + name + '」' + tail;
+    }
+    return JSON.stringify(a);
+  }
+
+  // ---------------- 让 AI 选一手 ----------------
+  function candidates(st, n) {
+    var list = [];
+    try { list = ai.rank(st, {}) || []; } catch (e) { list = []; }
+    var out = [], seen = {};
+    for (var i = 0; i < list.length && out.length < (n || 10); i++) {
+      var a = list[i] && list[i].action;
+      if (!a) continue;
+      var k = JSON.stringify(a);
+      if (seen[k]) continue;
+      seen[k] = 1;
+      var pv = null;
+      try { pv = g.previewAction(st, a); } catch (e2) { pv = null; }
+      out.push({ action: a, score: Math.round(list[i].score), text: describe(st, a), hint: (pv && pv.text) || '' });
+    }
+    return out;
+  }
+
+  function askMove(st) {
+    var c = load();
+    if (!c.key) return Promise.reject(new Error('还没填 API Key'));
+    var cands = candidates(st, 10);
+    if (!cands.length) return Promise.reject(new Error('引擎没给出候选'));
+    var lines = cands.map(function (x, i) {
+      return (i + 1) + '. ' + x.text + (x.hint ? '（' + x.hint + '）' : '');
+    }).join('\n');
+    var sys = '你在玩《超能斗兽棋》（船长自制斗兽棋的网页版），你执' + sideName(st.turn) + '方，对手是' + (st.turn === 'red' ? '蓝' : '红') + '方。' +
+      '每回合只能从给定候选里挑一手，别自己发明动作。\n规则：\n' + RULES +
+      '\n回答必须是严格 JSON，不要多余文字：{"pick": 序号(整数), "think": "80~200字的盘算，像人一样想，可以权衡风险和赌一把", "say": "一句话碎嘴（不超过20字）"}';
+    var user = '棋盘（水=深水区，暗=背面朝上，空=空格）：\n' + boardText(st) + '\n\n局面：\n' + rosterText(st) +
+      '\n\n最近几手：\n' + historyText(st, 8) + '\n\n候选（带分数的已经按引擎评估从高到低排好，分数只是参考，你可以逆着选）：\n' + lines +
+      '\n\n现在轮到你，挑一手。';
+    return post(c, {
+      model: c.model || DEFAULT_MODEL,
+      temperature: 0.55,
+      max_tokens: 700,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'system', content: sys }, { role: 'user', content: user }]
+    }).then(function (txt) {
+      var j = pickJson(txt);
+      var n = Math.round(Number(j.pick));
+      if (!(n >= 1 && n <= cands.length)) n = 1;
+      return {
+        action: cands[n - 1].action,
+        think: String(j.think || '').slice(0, 600),
+        say: String(j.say || '').slice(0, 60),
+        candidates: cands
+      };
+    });
+  }
+
+  // ---------------- 复盘点评 ----------------
+  function askReview(row) {
+    var c = load();
+    if (!c.key) return Promise.reject(new Error('还没填 API Key'));
+    var steps = (row && row.steps) || [];
+    if (!steps.length) return Promise.reject(new Error('这一局没有棋谱'));
+    var who = row.result === 'red' ? '红方胜' : (row.result === 'blue' ? '蓝方胜' : '平局');
+    var sys = '你是一位下棋很厉害、说话不客气但讲道理的教练，给一盘《超能斗兽棋》写赛后点评。' +
+      '规则要点：' + RULES + '\n只写实质内容，不奉承。回答用中文纯文本，分四段，每段一两句，不要 markdown 标题。';
+    var user = '这局结果：' + who + '，共 ' + row.ply + ' 手' +
+      (row.giant ? '，开启了巨兽天降' : '') + '，对手是' + (row.opp || '本地 AI') + '。\n\n棋谱：\n' +
+      steps.join('\n') +
+      '\n\n请写四段：①整盘的转折点在第几手、发生了什么；②输的一方（或败着）错在哪，给一个更好的选择；③赢的一方赢在哪；④下次开局给一条最该记住的建议。';
+    return post(c, {
+      model: c.model || DEFAULT_MODEL,
+      temperature: 0.7,
+      max_tokens: 900,
+      messages: [{ role: 'system', content: sys }, { role: 'user', content: user }]
+    });
+  }
+
+  function test(c) {
+    if (!c || !c.key) return Promise.reject(new Error('还没填 API Key'));
+    return post(c, {
+      model: c.model || DEFAULT_MODEL,
+      temperature: 0,
+      max_tokens: 16,
+      messages: [{ role: 'user', content: '回一个字：好' }]
+    }, 20000).then(function (t) {
+      return '模型回话：' + String(t).replace(/\s+/g, ' ').slice(0, 40);
+    });
+  }
+
+  root.BeastLLM = {
+    DEFAULT_BASE: DEFAULT_BASE,
+    DEFAULT_MODEL: DEFAULT_MODEL,
+    KEY: KEY,
+    load: load,
+    save: save,
+    ready: ready,
+    describe: describe,
+    candidates: candidates,
+    askMove: askMove,
+    askReview: askReview,
+    test: test,
+    boardText: boardText,
+    rosterText: rosterText
+  };
+
+  // node 下（跑测试）也能 require 到
+  if (typeof module !== 'undefined' && module.exports) module.exports = root.BeastLLM;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* 超能斗兽棋 —— 网页界面逻辑 */
+(function () {
+  'use strict';
+  // node 下（跑 game-test.js 的界面调度自测）直接 require；浏览器里拿两个全局
+  var inNode = (typeof document === 'undefined');
+  var g = inNode ? require('./game-core.js') : window.CaptainBeast;
+  var ai = inNode ? require('./game-ai.js') : window.CaptainAI;
+  var st, sel = null, pendingSkill = null, aiOn = false, aiLevel = 3, turnNo = 1;
+  var giantOn = true, pendingWhaleFx = false;
+  var views = null, replay = null, stats = null, loggedOver = false;   // 复盘视图 / 战绩
+
+  var $ = function (id) { return document.getElementById(id); };
+  var boardEl, skillsEl, logEl, turnEl, hintEl;
+
+  function nameOf(u) { return (u.owner === 'red' ? '红' : '蓝') + g.NAME[u.kind]; }
+
+  // 深海巨兽天降：闪光 + 棋盘抖一下 + 中央浮出一只大怪兽（等 render 之后再放，免得被重绘冲掉）
+  function playWhaleFx() {
+    if (!boardEl) return;
+    boardEl.classList.add('whaleBoard');
+    setTimeout(function () { boardEl.classList.remove('whaleBoard'); }, 500);
+    g.WHALE_CELLS.forEach(function (cell) {
+      var el = boardEl.querySelector('[data-i="' + cell + '"]');
+      if (!el) return;
+      el.classList.add('whaleHit');
+      setTimeout(function () { el.classList.remove('whaleHit'); }, 1000);
+    });
+    var tag = document.createElement('div');
+    tag.className = 'whaleEmoji';
+    tag.textContent = '🐋';
+    boardEl.appendChild(tag);
+    setTimeout(function () { if (tag.parentNode) tag.parentNode.removeChild(tag); }, 1300);
+  }
+
+  function logEvents(events) {
+    if (!events || !events.length) return;
+    for (var w = 0; w < events.length; w++) if (events[w].t === 'whale') { pendingWhaleFx = true; break; }
+    events.forEach(function (e) {
+      if (e.t === 'turn') return;
+      var div = document.createElement('div');
+      div.className = 'line t-' + e.t;
+      div.textContent = e.text;
+      logEl.appendChild(div);
+    });
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function say(text, cls) {
+    var div = document.createElement('div');
+    div.className = 'line ' + (cls || 'sys');
+    div.textContent = text;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // 谁该操作：鼠逃生命中归鼠的主人，其余时候归当前回合方（与 game-core 的 actorOf 同一条规则）
+  function actorOfIn(s) { return g.actorOf(s); }
+
+  // 人类能不能动：轮到红方就能动；轮到蓝方、或者在替蓝方的鼠挑逃生落点时，开着电脑对手就交给它
+  function humanCanPlayIn(s, aiOnFlag) {
+    if (!s || s.over) return false;
+    return !(aiOnFlag && g.actorOf(s) === 'blue');
+  }
+  function humanCanPlay() { return st ? humanCanPlayIn(st, aiOn) : false; }
+
+  // 该不该叫电脑对手出手——看的是「当前该谁操作」，不是 st.turn：
+  // 蓝方吃掉红方鼠时 st.turn 还停在 blue，但落点得由红方自己点，AI 不许抢这一手
+  function aiShouldActIn(s, aiOnFlag) {
+    if (!s || s.over || !aiOnFlag) return false;
+    return g.actorOf(s) === 'blue';
+  }
+  function aiShouldAct() { return st ? aiShouldActIn(st, aiOn) : false; }
+
+  function escapeOwner() { return st ? g.escapeOwner(st) : null; }
+
+  // 顶部回合条：逃生命中要把「这一手归谁」写清楚，别让人以为轮到对面了
+  function turnbarText(s, no) {
+    if (s.over) return s.result === 'draw' ? '平局' : (s.result === 'red' ? '红方胜利' : '蓝方胜利');
+    var eo = g.escapeOwner(s);
+    if (eo) return '第 ' + no + ' 回合 · ' + (eo === 'red' ? '红' : '蓝') + '方的鼠正在逃生——落点由它自己选（不占回合）';
+    return '第 ' + no + ' 回合 · 轮到' + (s.turn === 'red' ? '红方' : '蓝方');
+  }
+
+  // 决算倒计时：连续 20 手没有实质进展就到决算，剩 10 手以内开始提醒（船长 2026-10-18 要的）
+  var SETTLE_IDLE = 20;
+  function paintSettleCd() {
+    var el = $('settleCd');
+    if (!el) return;
+    var left = SETTLE_IDLE - (st.idle || 0);
+    if (st.over || left >= 10) { el.hidden = true; return; }
+    el.hidden = false;
+    el.className = 'settleCd' + (left <= 5 ? ' hot' : '');
+    el.textContent = '⚖️ 决算倒计时：还剩 ' + left + ' 手没有实质进展就到决算' +
+      (left <= 5 ? '——快掀牌、吃子或放个技能把它掐掉' : '');
+  }
+
+  function hintText() {    if (st.over) return st.result === 'draw' ? '平局——双方同归于尽' : (st.result === 'red' ? '红方胜利！' : '蓝方胜利！');
+    var eo = escapeOwner();
+    if (eo) return (eo === 'red' ? '红' : '蓝') + '方的鼠挣脱了——点任意空格把它放下去（不占回合）';
+    if (st.pending && st.pending.kind === 'chain') {
+      return '狼可以连吃！点红框目标继续，或点自己（' + g.NAME[st.board[st.pending.cell].kind] + '）放弃';
+    }
+    if (pendingSkill) {
+      if (pendingSkill.id === 'volley' || pendingSkill.id === 'shock') return '点一个相邻格作为方向';
+      return '点一个敌方单位作为目标（灰框可取消）';
+    }
+    if (sel !== null && st.board[sel] && st.board[sel].moves <= 0) {
+      return '这只「' + g.NAME[st.board[sel].kind] + '」本回合已经动过了（狼连吃、企鹅冰封之后也是这样）；点空白处换个动物';
+    }
+    if (sel !== null) {
+      var tl = g.moveTargets(st, sel) || [];
+      var hasThaw = tl.filter(function (x) { return x.kind === 'thaw'; }).length > 0;
+      return '点了高亮的格子就走过去 / 吃掉它' + (hasThaw ? '；自家冰龙那一格是敲冰（敲一次裂一层）' : '') + '；再点一次取消';
+    }
+    return (st.turn === 'red' ? '红方' : '蓝方') + '行动：掀一张暗牌（谁的都可能），或指挥自己已公开的动物行动';
+  }
+
+  function render() {
+    var movable = {}, eatable = {}, pickable = {}, dirHint = {};
+
+    if (st.pending && st.pending.kind === 'chain') {
+      st.pending.targets.forEach(function (t) { eatable[t] = true; });
+    }
+    if (st.pending && st.pending.kind === 'escape') {
+      for (var i0 = 0; i0 < st.board.length; i0++) if (!st.board[i0]) movable[i0] = true;
+    }
+    if (pendingSkill) {
+      if (pendingSkill.id === 'pounce') {
+        var qp = g.rc(pendingSkill.cell);
+        for (var i1 = 0; i1 < st.board.length; i1++) {
+          var e1 = st.board[i1];
+          if (!e1 || !e1.revealed) continue;
+          var anyIce1 = (e1.kind === 'dino' && e1.frozen);   // 冰封中的恐龙是中立困兽，谁的猛扑都能砸
+          if (e1.owner === st.turn && !anyIce1) continue;
+          var qe = g.rc(i1);
+          if (Math.abs(qp.r - qe.r) + Math.abs(qp.c - qe.c) === 1) pickable[i1] = true;
+        }
+      } else if (pendingSkill.id === 'freeze') {
+        for (var i2 = 0; i2 < st.board.length; i2++) {
+          var e2 = st.board[i2];
+          if (e2 && e2.owner !== st.turn && e2.revealed) pickable[i2] = true;
+        }
+      } else if (pendingSkill.id === 'volley' || pendingSkill.id === 'shock') {
+        var q0 = g.rc(pendingSkill.cell);
+        g.DIR8.forEach(function (d) {
+          var r = q0.r + d.dr, c = q0.c + d.dc;
+          if (r >= 0 && r < g.N && c >= 0 && c < g.N) dirHint[g.idx(r, c)] = true;
+        });
+      }
+    }
+    if (sel !== null && st.board[sel] && st.board[sel].moves > 0) {
+      g.moveTargets(st, sel).forEach(function (t) {
+        if (t.kind === 'eat') eatable[t.to] = true; else movable[t.to] = true;
+      });
+    }
+
+    boardEl.innerHTML = '';
+    for (var i = 0; i < 25; i++) {
+      var u = st.board[i];
+      var cell = document.createElement('div');
+      var ownerSide = (u && u.revealed) ? u.owner : null;   // 暗牌不透露归属
+      cell.className = 'cell ' + (ownerSide ? 'side-' + ownerSide : 'side-none');
+      if (g.isWater(i)) cell.className += ' water';
+      if (sel === i) cell.className += ' sel';
+      if (movable[i]) cell.className += ' movable';
+      if (eatable[i]) cell.className += ' eatable';
+      if (pickable[i]) cell.className += ' pickable';
+      if (dirHint[i]) cell.className += ' dirHint';
+      if (st.pending && st.pending.kind === 'chain' && st.pending.cell === i) cell.className += ' sel';
+
+      if (u) {
+        var tile = document.createElement('div');
+        tile.className = 'tile ' + (u.revealed ? ('face owner-' + u.owner) : 'back');
+        if (u.revealed) {
+          tile.innerHTML = '<span class="icon">' + (g.ICON[u.kind] || '?') + '</span>' +
+            '<span class="nm">' + g.NAME[u.kind] + '</span>' +
+            '<span class="lv">' + u.level + '</span>' +
+            (u.jailed > 0 ? '<span class="badge">🔒</span>' : '') +
+            (u.frozen ? '<span class="badge">❄️</span>' : '');
+          tile.title = nameOf(u) + ' · 等级 ' + u.level + (u.frozen ? ' · 冰封中（需两次威力≥7 的攻击解冻）' : '') + (u.jailed > 0 ? ' · 被冰封禁锢' : '');
+        } else {
+          tile.innerHTML = '<span class="qn">?</span>';
+          tile.title = '未公开的牌（只受击退，不受伤害）';
+        }
+        cell.appendChild(tile);
+      } else if (g.isWater(i)) {
+        cell.innerHTML = '<span class="waterTag">深水区</span>';
+      }
+      cell.dataset.i = i;
+      cell.addEventListener('click', onCellClick);
+      boardEl.appendChild(cell);
+    }
+
+    turnEl.textContent = turnbarText(st, turnNo);
+    turnEl.className = 'turnbar ' + (st.over ? 'over' : 'turn-' + (g.escapeOwner(st) || st.turn));
+    paintSettleCd();
+    hintEl.textContent = hintText();
+    if (pendingWhaleFx) { pendingWhaleFx = false; playWhaleFx(); }
+
+    // 技能面板
+    skillsEl.innerHTML = '';
+    if (sel !== null && st.board[sel] && st.board[sel].revealed) {
+      var su = st.board[sel];
+      var list = (humanCanPlay() && su.owner === st.turn) ? g.skillsFor(st, sel) : [];
+      var head = document.createElement('div');
+      head.className = 'skHead';
+      head.textContent = nameOf(su) + ' 的技能' + (su.owner === st.turn ? '' : '（对方的）');
+      skillsEl.appendChild(head);
+      var skText = g.SKILL_TEXT && g.SKILL_TEXT[su.kind];
+      if (skText) {
+        var skDesc = document.createElement('div');
+        skDesc.className = 'skText';
+        skDesc.textContent = skText;
+        skillsEl.appendChild(skDesc);
+      }
+      if (!list.length) {
+        var none = document.createElement('div');
+        none.className = 'skNone';
+        none.textContent = (su.owner === st.turn)
+          ? '这只暂时没有可用技能（或已经用掉了）'
+          : '现在不是它的回合';
+        skillsEl.appendChild(none);
+      }
+      list.forEach(function (sk) {
+        var b = document.createElement('button');
+        b.className = 'skBtn';
+        b.textContent = sk.label;
+        b.onclick = function () { useSkill(sk.id); };
+        skillsEl.appendChild(b);
+      });
+    } else {
+      var d = document.createElement('div');
+      d.className = 'skNone';
+      d.textContent = humanCanPlay() ? '点一个自己的动物，看它能做什么' : '等对方行动…';
+      skillsEl.appendChild(d);
+    }
+  }
+
+  function ownerOfCell(i) { return currentSides[i] || null; }
+
+  var currentSides = [];
+
+  function computeSides() {
+    // 开局分区是固定的：拿一局新棋看每个格子的归属（空格 = 中央深水区，无归属）
+    currentSides = g.newGame().board.map(function (u) { return u ? u.owner : null; });
+  }
+
+  function doAction(action, quiet) {
+    if (replay) { say('复盘模式里不能落子——先点「回到最新」', 'bad'); return false; }
+    var r = g.applyAction(st, action);
+    if (!r.ok) { if (!quiet) say('不能这么做：' + r.error, 'bad'); return false; }
+    var prevTurn = st.turn;
+    st = r.state;
+    if (st.turn !== prevTurn) turnNo++;
+    logEvents(r.events);
+    sel = null; pendingSkill = null;
+    render();
+    logIfOver();
+    maybeAi();
+    return true;
+  }
+
+  function maybeAi() {
+    if (replay) return;
+    if (aiShouldAct()) setTimeout(aiTurn, 420);
+  }
+
+  // 收工的活儿：本地 AI 顶一手
+  function localTurn() {
+    var r = g.applyAction(st, safeLocal());
+    if (!r.ok) r = g.applyAction(st, { type: 'skip' });
+    if (!r.ok) return;
+    var prev = st.turn;
+    st = r.state;
+    if (st.turn !== prev) turnNo++;
+    logEvents(r.events);
+    render();
+    maybeAi();
+  }
+  // 电脑这一手：万一算不出来（脚本没加载全 / 某个局面把评分算崩了），
+  // 不要闷声放弃回合——退一步用军师榜第一名，并把原因说给船长听。
+  function safeLocal() {
+    try {
+      var a = ai.decide(st, aiLevel);
+      if (a) return a;
+    } catch (e) {
+      try {
+        var list = ai.rank(st, {});
+        if (list && list.length) {
+          say('电脑这手算炸了（' + (e && e.message ? e.message : e) + '），改听军师榜第一名', 'bad');
+          return list[0].action;
+        }
+      } catch (e2) {}
+      say('电脑这手算不出来：' + (e && e.message ? e.message : e), 'bad');
+    }
+    return { type: 'skip' };
+  }
+
+  // ---------------- 对手：本地引擎，或者访客自己接的大模型 ----------------
+  // oppMode: 0 = 无对手   1 = 本地 AI（默认，离线也能下）   2 = 我的 AI（浏览器直连访客自己填的接口）
+  var oppMode = 1;
+  var OPP_LABEL = { 0: '对手：无', 1: '对手：本地 AI', 2: '对手：我的 AI' };
+  var llm = (typeof window !== 'undefined' && window.BeastLLM)
+    || (inNode && typeof require === 'function' ? require('./game-llm.js') : null);
+
+  // 只有三样都填了才算「接上了」——缺一样就退回本地引擎，不弹一堆错
+  function llmReady() {
+    if (!llm) return false;
+    var c = llm.load();
+    return !!(c.base && c.model && c.key && c.useMove !== false);
+  }
+
+  function paintOpp() {
+    var b = $('btnAi'); if (!b) return;
+    aiOn = oppMode > 0;
+    b.textContent = OPP_LABEL[oppMode] + (oppMode === 2 && !llmReady() ? '（未配置）' : '');
+    b.classList.toggle('on', oppMode > 0);
+  }
+
+  // 访客自己的 AI 执蓝：把局面拼成提示词，直连它填的接口（浏览器 → 对方的 API，本站不经手）
+  function llmTurn() {
+    say('🤖 你的 AI 正在想这一步……', 'sys');
+    llm.askMove(st).then(function (j) {
+      if (!j || !j.action) throw new Error((j && j.error) || '它没给出走法');
+      var r2 = g.applyAction(st, j.action);
+      if (!r2.ok) throw new Error('这一步不合法：' + (r2.error || ''));
+      var prev = st.turn;
+      st = r2.state;
+      if (st.turn !== prev) turnNo++;
+      // 把这一手的长想法挂进棋谱——复盘时还能回看它当时在想什么
+      if (st.history && st.history.length) {
+        var lastH = st.history[st.history.length - 1];
+        if (j.think) lastH.think = j.think;
+        if (j.say) lastH.say = j.say;
+      }
+      renderThinkLog();
+      if (j.say) saySoft(j.say, 'sys', '🤖 ', '');
+      else say('🤖 （这一手它没吭声，想法在右边「AI 的思考」里）', 'sys');
+      sel = null; pendingSkill = null;
+      logEvents(r2.events);
+      render();
+      logIfOver();
+      maybeAi();
+    }).catch(function (e) {
+      say('你自己的接口没答上来（' + ((e && e.message) || e) + '）——这一手让本地引擎顶上', 'bad');
+      if (aiShouldAct()) localTurn();
+    });
+  }
+  // 战报里把提到评分/候选的那几句收进「▸ 引擎的话」折叠块，默认收起、点一下展开。
+  // 只管显示——引擎照旧打分。
+  var ADVISOR_RE = /军师|评分|打分|候选表|候选项|候补|排在前|排第一/;
+  function splitAdvisor(t) {
+    var s = String(t == null ? '' : t), keep = '', adv = '', buf = '';
+    for (var i = 0; i < s.length; i++) {
+      buf += s[i];
+      if ('，,。；;！!？?、\n'.indexOf(s[i]) >= 0) {
+        if (ADVISOR_RE.test(buf)) adv += buf; else keep += buf;
+        buf = '';
+      }
+    }
+    if (buf) { if (ADVISOR_RE.test(buf)) adv += buf; else keep += buf; }
+    var cut = function (x) { return x.replace(/^[\s，,。；;、]+/, '').replace(/[\s，,。；;、]+$/, ''); };
+    return { keep: cut(keep), adv: cut(adv) };
+  }
+
+  // 一整行战报：AI 说的话正常显示，引擎相关的碎碎念折起来
+  function saySoft(text, cls, prefix, suffix) {
+    var r = splitAdvisor(text);
+    var div = document.createElement('div');
+    div.className = 'line ' + (cls || 'sys');
+    div.appendChild(document.createTextNode(prefix + r.keep + (r.keep ? suffix : '')));
+    if (r.adv) {
+      var det = document.createElement('details');
+      det.className = 'adv';
+      var sm = document.createElement('summary');
+      sm.textContent = '引擎的话';
+      det.appendChild(sm);
+      det.appendChild(document.createTextNode(r.adv + suffix));
+      div.appendChild(det);
+    } else if (!r.keep) {
+      div.textContent = prefix + suffix;
+    }
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function aiTurn() {
+    if (!aiShouldAct()) return;       // 只有「该蓝方操作」时电脑才出手，逃生命中看的是鼠主人
+    if (oppMode === 2 && llmReady()) { llmTurn(); return; }
+    localTurn();
+  }
+
+  // ---------------- 战绩：全部记在这台浏览器的 localStorage 里（不上传任何东西）----------------
+  // 原来这套是 POST 给本机一个对战服务的接口；公开版没有服务器了，
+  // 就地把最近 60 局存在浏览器里。清缓存 = 战绩清零，页面上写清楚了。
+  var REC_KEY = 'superbeast.records';
+  var REC_MAX = 60;
+
+  function readRecords() {
+    try {
+      var a = JSON.parse(localStorage.getItem(REC_KEY) || '[]');
+      return Array.isArray(a) ? a : [];
+    } catch (e) { return []; }
+  }
+
+  function writeRecords(a) {
+    try { localStorage.setItem(REC_KEY, JSON.stringify(a.slice(-REC_MAX))); } catch (e) {}
+  }
+
+  function thinkSnippet(t) {
+    var s = String(t || '').replace(/\s+/g, ' ').trim();
+    return s.length > 200 ? s.slice(0, 200) + '…' : s;
+  }
+
+  // mid = true 表示「这局还没下完」（F10 手动存档用），棋谱照样带上，方便事后复盘
+  function recordRow(mid) {
+    var steps = (st.history || []).map(function (h) {
+      return h.label + (h.think ? '（AI 当时的想法：' + thinkSnippet(h.think) + '）' : '');
+    });
+    var who = oppMode === 2 ? '我的 AI' : '本地 AI';
+    return {
+      over: !mid, result: mid ? 'unfinished' : st.result, ply: st.ply,
+      giant: !!giantOn, level: aiLevel, opp: aiOn ? who : '双人',
+      at: new Date().toISOString(), steps: steps
+    };
+  }
+
+  function saveRecord(mid) {
+    var row = recordRow(mid);
+    var a = readRecords();
+    a.push(row);
+    writeRecords(a);
+    return row;
+  }
+
+  function logIfOver() {
+    if (!st.over || loggedOver) return;
+    loggedOver = true;
+    saveRecord(false);
+    renderStats();
+  }
+
+  function loadStats() { renderStats(); }
+
+  function statRow(k, v) { return '<div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div>'; }
+
+  // 电脑棋力：新记录存的是 1~4 的数字档，老记录存的是 normal/hard/deep 这种名字
+  var LEVEL_NAME = { 1: '随意', 2: '细心', 3: '老深算', 4: '新深算' };
+  var LEVEL_OLD = { normal: '随意', hard: '细心', deep: '老深算' };
+  function levelName(v) {
+    if (v === undefined || v === null || v === '') return '';
+    var n = Math.round(Number(v));
+    if (isFinite(n) && LEVEL_NAME[n]) return n + '·' + LEVEL_NAME[n];
+    return LEVEL_OLD[v] || String(v);
+  }
+
+  function renderStats() {
+    var el = $('stats'); if (!el) return;
+    var rows = readRecords().filter(function (r) { return r.over && r.result !== 'unfinished'; });
+    if (!rows.length) {
+      el.innerHTML = '<div class="skNone">还没有记录。打完一局自动记在这台浏览器里（不联网、不上传）。</div>';
+      return;
+    }
+    var total = rows.length, red = 0, blue = 0, draw = 0, plies = 0, giants = 0, mine = 0;
+    rows.forEach(function (r) {
+      if (r.result === 'red') red++;
+      else if (r.result === 'blue') blue++;
+      else draw++;
+      plies += Number(r.ply) || 0;
+      if (r.giant) giants++;
+      if (r.opp === '我的 AI') mine++;
+    });
+    var rate = function (n) { return Math.round(n / total * 100) + '%'; };
+    var h = '<div class="statGrid">' +
+      statRow('总对局', total) +
+      statRow('红胜（你）', red + ' · ' + rate(red)) +
+      statRow('蓝胜（对手）', blue + ' · ' + rate(blue)) +
+      statRow('平局', draw) +
+      statRow('平均手数', Math.round(plies / total)) +
+      statRow('带巨兽天降', giants) +
+      statRow('对手是我自己的 AI', mine) +
+      '</div>';
+    h += '<div class="statLine">最近 ' + Math.min(5, rows.length) + ' 局</div>';
+    rows.slice(-5).reverse().forEach(function (r) {
+      var who = r.result === 'red' ? '红胜' : (r.result === 'blue' ? '蓝胜' : '平局');
+      var at = String(r.at || '').replace('T', ' ').slice(5, 16);
+      h += '<div class="statLine">' + esc(at) + ' · ' + who + ' · ' + esc(r.ply) + ' 手 · ' +
+           (r.giant ? '带天降' : '无天降') + ' · ' + esc(levelName(r.level)) + ' · ' + esc(r.opp || '') + '</div>';
+    });
+    el.innerHTML = h;
+  }
+
+  // 复盘点评：交给访客自己的 AI 来写（本地引擎只在内部算分，不会写字）
+  function runReview() {
+    var box = $('reviewBox'); if (!box) return;
+    var rows = readRecords();
+    var row = null;
+    for (var i = rows.length - 1; i >= 0; i--) {
+      if (rows[i].steps && rows[i].steps.length) { row = rows[i]; break; }
+    }
+    if (!row) {
+      box.innerHTML = '<div class="skNone">还没有棋谱。下完一局会自动留一份（对局中按 F10 也能手动存）。</div>';
+      return;
+    }
+    if (!llmReady()) {
+      box.innerHTML = '<div class="skNone">复盘点评要一个会写字的 AI——点顶栏「⚙ AI 接口」填上你自己的接口（Base URL / 模型 / Key），再回来点这里。棋盘和规则不用联网。</div>';
+      return;
+    }
+    box.innerHTML = '<div class="skNone">你的 AI 正在翻棋谱…（要几秒）</div>';
+    llm.askReview(row).then(function (text) {
+      var who = row.result === 'red' ? '红胜（你）' : (row.result === 'blue' ? '蓝胜（对手）' : '平局');
+      box.innerHTML = '<div class="statLine">最近一局 · ' + esc(who) + ' · ' + esc(row.ply) + ' 手 · ' +
+        esc(row.steps.length) + ' 步棋谱</div>' +
+        '<div class="reviewText">' + esc(text).replace(/\n/g, '<br>') + '</div>';
+    }).catch(function (e) {
+      box.innerHTML = '<div class="skNone">点评没写出来：' + esc((e && e.message) || e) + '</div>';
+    });
+  }
+
+  // ---------------- AI 的思考（长想法记在右侧面板，战报里只留一句自言自语）----------------
+  function thinkEntries() {
+    var out = [];
+    if (!st.history) return out;
+    for (var i = st.history.length - 1; i >= 0; i--) {
+      if (st.history[i].think) out.push(st.history[i]);
+    }
+    return out;
+  }
+
+  function renderThinkLog() {
+    var el = $('aiThink');
+    if (!el) return;
+    var list = thinkEntries();
+    if (!list.length) {
+      el.className = 'skNone';
+      el.textContent = '对手还没开始想棋。用「本地 AI」时它不写长想法；切成「对手：我的 AI」并填好接口，每一手的盘算都会记在这儿。';
+      return;
+    }
+    el.className = 'thinkList';
+    var html = '<div class="skNone" style="margin:0 0 4px">最新的在最上面 · 已记 ' + list.length + ' 手</div>';
+    list.forEach(function (h) {
+      var who = (h.turn === 'red') ? '你' : '对手';
+      var side = (h.turn === 'red') ? '红方' : '蓝方';
+      html += '<div class="thinkItem"><div class="thinkHead">第 ' + h.ply + ' 手 · ' + who + '（' + side + '）· ' + esc(h.label) + '</div>' +
+        '<div class="thinkBody">' + esc(h.think) + '</div>' +
+        (h.say ? '<div class="thinkSay">🤖 ' + esc(h.say) + '</div>' : '') +
+        '</div>';
+    });
+    el.innerHTML = html;
+  }
+
+  // ---------------- 候选表：本地引擎当场算一遍（不联网、不起服务）----------------
+  function loadCandidates() {
+    var el = $('cands'); if (!el) return;
+    el.innerHTML = '<div class="skNone">本地引擎正在算……</div>';
+    var now = function () { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); };
+    var t0 = now();
+    var list = [];
+    try { list = ai.rank(st, {}) || []; }
+    catch (e) { el.innerHTML = '<div class="skNone">算不出来：' + esc(e.message || e) + '</div>'; return; }
+    var t1 = now();
+    var seen = {}, out = [];
+    for (var i = 0; i < list.length && out.length < 12; i++) {
+      var a = list[i] && list[i].action;
+      if (!a) continue;
+      var key = JSON.stringify(a);
+      if (seen[key]) continue;
+      seen[key] = 1;
+      var pv = null;
+      try { pv = g.previewAction(st, a); } catch (e2) { pv = null; }
+      out.push({
+        score: Math.round(list[i].score),
+        text: llm ? llm.describe(st, a) : key,
+        outcome: (pv && pv.text) || ''
+      });
+    }
+    if (!out.length) { el.innerHTML = '<div class="skNone">这个局面它算不出候选。</div>'; return; }
+    var h = '';
+    out.forEach(function (c, k) {
+      h += '<div class="candRow' + (k === 0 ? ' top' : '') + '">' +
+           '<span class="cs">' + esc(c.score) + '</span>' +
+           '<span class="ct">' + esc(c.text) + '</span></div>';
+      if (c.outcome) h += '<div class="candRow" style="border:none;padding:0 0 3px"><span class="cs"></span><span class="co">' + esc(c.outcome) + '</span></div>';
+    });
+    h += '<div class="statLine">分数最高的那条就是它的首选，算一遍 ' + Math.round(t1 - t0) + ' ms。' +
+         '拿它跟自己的判断比一比，就能知道这台引擎值不值得信。</div>';
+    el.innerHTML = h;
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>]/g, function (c) {
+      return c === '&' ? '&amp;' : (c === '<' ? '&lt;' : '&gt;');
+    });
+  }
+
+  // ---------------- 悔棋 / 复盘回放 ----------------
+  function undoOnce() {
+    var r = g.undo(st);
+    if (!r.ok) return false;
+    st = r.state; sel = null; pendingSkill = null;
+    turnNo = Math.max(1, Math.floor(st.ply / 2) + 1);
+    return true;
+  }
+
+  function doUndo() {
+    if (replay) exitReplay();
+    if (!undoOnce()) { say('已经在开局那一手了，没得悔', 'bad'); return; }
+    var guard = 0;
+    while (aiShouldAct() && guard++ < 3) { if (!undoOnce()) break; }   // 一路退到「轮到自己做决定」的那一手
+    loggedOver = false;
+    logEl.innerHTML = '';
+    say('悔棋：退回上一手（战报另起一页；棋谱留着，点「复盘」能看全程）。', 'sys');
+    render();
+  }
+
+  function enterReplay(at) {
+    if (replay) exitReplay();
+    views = g.timeline(st);
+    replay = { live: st, i: (at == null ? views.length - 1 : at) };
+    sel = null;
+    showReplayView();
+  }
+
+  function exitReplay() {
+    if (!replay) return;
+    st = replay.live; replay = null; views = null;
+    var bar = $('replayBar'); if (bar) bar.style.display = 'none';
+    sel = null;
+    render();
+  }
+
+  function showReplayView() {
+    // game-core 的 timeline() 直接给一串「局面快照」，快照上多带一个 stepLabel
+    var v = views[replay.i];
+    st = v;
+    var bar = $('replayBar'); if (bar) bar.style.display = 'flex';
+    var stp = $('replayStep');
+    if (stp) stp.textContent = '第 ' + replay.i + ' / ' + (views.length - 1) + ' 手';
+    var lb = $('replayLabel'); if (lb) lb.textContent = v.stepLabel || '';
+    render();
+  }
+
+  function replayStep(d) {
+    if (!replay) return;
+    var n = replay.i + d;
+    if (n < 0 || n > views.length - 1) return;
+    replay.i = n;
+    showReplayView();
+  }
+
+  // ---------------- 规则书：直接读 规则书.md（一处改、到处生效）----------------
+  function mdToHtml(md) {
+    var lines = String(md || '').split(/\r?\n/);
+    var out = [], inUl = false, inOl = false, inTbl = false, tblRow = 0;
+    function closeAll() {
+      if (inUl) { out.push('</ul>'); inUl = false; }
+      if (inOl) { out.push('</ol>'); inOl = false; }
+      if (inTbl) { out.push('</table>'); inTbl = false; }
+    }
+    function inline(s) {
+      return esc(s).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
+    }
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      if (!t) { closeAll(); continue; }
+      var m = /^(#{1,4})\s+(.*)$/.exec(t);
+      if (m) {
+        closeAll();
+        var lv = Math.min(4, m[1].length + 1);
+        out.push('<h' + lv + '>' + inline(m[2]) + '</h' + lv + '>');
+        continue;
+      }
+      if (/^-{3,}$/.test(t)) { closeAll(); out.push('<hr>'); continue; }
+      if (t.charAt(0) === '|') {
+        if (!inTbl) { closeAll(); out.push('<table>'); inTbl = true; tblRow = 0; }
+        var cells = t.replace(/^\||\|$/g, '').split('|');
+        var sep = cells.every(function (c) { return /^[\s:\-]+$/.test(c); });
+        if (sep) continue;
+        var tag = tblRow === 0 ? 'th' : 'td';
+        tblRow++;
+        out.push('<tr>' + cells.map(function (c) { return '<' + tag + '>' + inline(c.trim()) + '</' + tag + '>'; }).join('') + '</tr>');
+        continue;
+      }
+      if (inTbl) { out.push('</table>'); inTbl = false; }
+      if (/^[-*]\s+/.test(t) || /^\d+[.、]\s*/.test(t)) {
+        var ordered = /^\d/.test(t);
+        if (ordered && !inOl) { closeAll(); out.push('<ol>'); inOl = true; }
+        else if (!ordered && !inUl) { closeAll(); out.push('<ul>'); inUl = true; }
+        out.push('<li>' + inline(t.replace(/^[-*]\s+/, '').replace(/^\d+[.、]\s*/, '')) + '</li>');
+        continue;
+      }
+      closeAll();
+      out.push('<p>' + inline(t) + '</p>');
+    }
+    closeAll();
+    return out.join('\n');
+  }
+
+  // ---------------- 规则书：优先读同目录的 规则书.md；单文件发布时用内嵌的那一份 ----------------
+  function loadRulesText() {
+    var live = $('rulesLive'), stat = $('rulesStatic');
+    if (!live || live.dataset.loaded === '1') return;
+    function use(md) {
+      if (!md) return false;
+      live.innerHTML = mdToHtml(md);
+      live.dataset.loaded = '1';
+      live.style.display = '';
+      if (stat) stat.style.display = 'none';     // 现读的这份说了算，内置副本让位
+      return true;
+    }
+    // build 时把 md 塞进 window.__RULES_MD；开发时没有内嵌就去 fetch 同目录的 md
+    if (use(window.__RULES_MD)) return;
+    live.innerHTML = '<p class="skNone">正在读 规则书.md …</p>';
+    live.style.display = '';
+    Promise.reject(new Error('single-file')).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }).then(function (md) {
+      if (!use(md)) throw new Error('规则书是空的');
+    }).catch(function () {
+      live.innerHTML = ''; live.style.display = 'none';
+      if (stat) stat.style.display = '';
+    });
+  }
+
+  function useSkill(id) {
+    // 参数怎么要问引擎的 SKILL_NEED 表（不要再在这里维护一份名单，两边漂移过一次）：
+    // null = 不用选目标，点下去就放（自爆 / 陨石降临 / 十字波涛）
+    if (g.skillNeed(id) === null) { doAction({ type: 'skill', cell: sel, skill: id }); return; }
+    pendingSkill = { id: id, cell: sel };
+    sel = null;
+    render();
+    var cn = { volley: '狮王矢', shock: '冲击波', pounce: '猛扑', freeze: '冰封', kunwave: '十字波涛' }[id] || id;
+    say('选择「' + cn + '」的目标', 'sys');
+  }
+
+  function onCellClick(ev) {
+    var cell = parseInt(ev.currentTarget.dataset.i, 10);
+    if (!humanCanPlay()) return;
+
+    if (st.pending && st.pending.kind === 'escape') {
+      if (st.board[cell]) { say('逃生只能落在空白格', 'bad'); return; }
+      doAction({ type: 'escape', to: cell });
+      return;
+    }
+    if (st.pending && st.pending.kind === 'chain') {
+      if (cell === st.pending.cell) { doAction({ type: 'skip' }); return; }
+      if (st.pending.targets.indexOf(cell) >= 0) { doAction({ type: 'move', from: st.pending.cell, to: cell }); return; }
+      say('只能吃红框里的目标，或点自己放弃', 'bad');
+      return;
+    }
+    if (pendingSkill) {
+      var ps = pendingSkill;
+      if (ps.id === 'volley' || ps.id === 'shock') {
+        var q1 = g.rc(ps.cell), q2 = g.rc(cell);
+        var dr = q2.r - q1.r, dc = q2.c - q1.c;
+        var di = -1;
+        g.DIR8.forEach(function (d, k) { if (d.dr === dr && d.dc === dc) di = k; });
+        if (di < 0) { say('方向只能选上下左右相邻的那四格', 'bad'); return; }
+        pendingSkill = null;
+        doAction({ type: 'skill', cell: ps.cell, skill: ps.id, dir: di });
+        return;
+      }
+      pendingSkill = null;
+      doAction({ type: 'skill', cell: ps.cell, skill: ps.id, target: cell });
+      return;
+    }
+
+    var u = st.board[cell];
+    if (sel !== null && cell !== sel) {
+      var ts = g.moveTargets(st, sel);
+      var hit = null;
+      ts.forEach(function (t) { if (t.to === cell) hit = t; });
+      if (hit) { doAction({ type: 'move', from: sel, to: cell }); return; }
+    }
+    if (!u) { sel = null; render(); return; }
+    if (!u.revealed) { doAction({ type: 'reveal', cell: cell }); return; }
+    if (u.owner !== st.turn) { say('那是' + (u.owner === 'red' ? '红方' : '蓝方') + '的动物', 'bad'); return; }
+    sel = (sel === cell) ? null : cell;
+    render();
+  }
+
+  function newGame() {
+    st = g.newGame({ whale: giantOn });
+    sel = null; pendingSkill = null; turnNo = 1;
+    loggedOver = false; replay = null; views = null;
+    var rbar = $('replayBar'); if (rbar) rbar.style.display = 'none';
+    computeSides();
+    logEl.innerHTML = '';
+    say('新的一局开始了。24 张牌背面朝上随机铺满棋盘——连红蓝归属都藏在背面，掀开才知道是谁的。', 'sys');
+    say('规则：每回合二选一——掀一张暗牌（掀到对方的牌就归对方，本回合结束），或指挥自己已公开的动物行动。', 'sys');
+    if (oppMode === 2 && !llmReady()) {
+      say('提示：你选的是「对手：我的 AI」，但接口还没填——这一局先由本地引擎代打。点顶栏「⚙ AI 接口」可以填。', 'sys');
+    }
+    render();
+    renderThinkLog();
+    maybeAi();
+  }
+
+  // ---------------- AI 接口弹窗：填 Base URL / 模型 / Key，只存在这台浏览器里 ----------------
+  function openAiCfg() {
+    var m = $('aiCfg'); if (!m) return;
+    var c = (llm && llm.load()) || {};
+    $('cfgBase').value = c.base || '';
+    $('cfgModel').value = c.model || '';
+    $('cfgKey').value = c.key || '';
+    $('cfgUseMove').checked = c.useMove !== false;
+    $('cfgUseReview').checked = c.useReview !== false;
+    $('cfgMsg').textContent = '';
+    m.classList.add('show');
+  }
+
+  function closeAiCfg() {
+    var m = $('aiCfg'); if (m) m.classList.remove('show');
+  }
+
+  function saveAiCfg() {
+    if (!llm) return null;
+    var c = {
+      base: ($('cfgBase').value || '').trim() || llm.DEFAULT_BASE,
+      model: ($('cfgModel').value || '').trim() || llm.DEFAULT_MODEL,
+      key: ($('cfgKey').value || '').trim(),
+      useMove: !!$('cfgUseMove').checked,
+      useReview: !!$('cfgUseReview').checked
+    };
+    llm.save(c);
+    paintOpp();
+    return c;
+  }
+
+  function testAiCfg() {
+    var c = saveAiCfg();
+    var msg = $('cfgMsg');
+    if (!c || !c.key) { msg.textContent = '先填一个 API Key 才能试。'; return; }
+    msg.textContent = '正在连着试试……';
+    llm.test(c).then(function (r) {
+      msg.textContent = '通了 ✓ ' + (r || '');
+    }).catch(function (e) {
+      msg.textContent = '没通：' + ((e && e.message) || e) +
+        '　（常见的三种：Key 写错了、模型名不存在、对方的接口不允许浏览器直连）';
+    });
+  }
+
+  function bindAiCfg() {
+    if (!llm) return;
+    $('btnAiCfg').onclick = openAiCfg;
+    $('cfgSave').onclick = function () {
+      var c = saveAiCfg();
+      $('cfgMsg').textContent = (c && c.key)
+        ? '已保存到这台浏览器。切到「对手：我的 AI」就能让它执蓝。'
+        : '已保存。Key 还空着——这样不会真的调用接口。';
+    };
+    $('cfgTest').onclick = testAiCfg;
+    $('cfgClose').onclick = closeAiCfg;
+    $('aiCfg').addEventListener('click', function (e) { if (e.target === this) closeAiCfg(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAiCfg(); });
+  }
+
+  function boot() {
+    boardEl = $('board'); skillsEl = $('skills'); logEl = $('log');
+    turnEl = $('turnbar'); hintEl = $('hint');
+
+    $('btnNew').onclick = function () { newGame(); };
+
+    // 对手切换：无 → 本地 AI → 我的 AI
+    aiOn = true; oppMode = 1;
+    paintOpp();
+    $('btnAi').onclick = function () {
+      oppMode = (oppMode + 1) % 3;
+      paintOpp();
+      if (oppMode === 2) {
+        if (!llmReady()) {
+          say('「我的 AI」还没接口——点顶栏「⚙ AI 接口」填上 Base URL / 模型 / Key，就能让它替你执蓝。没填之前蓝方还是本地引擎在走。', 'sys');
+        } else {
+          say('蓝方交给你的 AI 来下（' + llm.load().model + '）。棋盘、规则、记账都还留在这台浏览器里。', 'sys');
+        }
+      }
+      maybeAi();
+      render();
+    };
+
+    // 电脑棋力：一根 1~4 的滑杆（1 = 随便玩，3 = 会认真想一手，4 = 每手都想两手），拖完就生效、值记在本地
+    var POWER_KEY = 'superbeast.aiPower';
+    var savedPower = null;
+    try { savedPower = localStorage.getItem(POWER_KEY); } catch (e) { savedPower = null; }
+    if (savedPower !== null && savedPower !== '' && isFinite(Number(savedPower))) {
+      aiLevel = Math.max(1, Math.min(4, Math.round(Number(savedPower))));
+    }
+    var powerEl = $('aiPower'), powerValEl = $('aiPowerVal');
+    function showPower() { powerValEl.textContent = String(aiLevel); }
+    powerEl.value = aiLevel;
+    showPower();
+    powerEl.oninput = function () {
+      aiLevel = Math.max(1, Math.min(4, Math.round(Number(this.value))));
+      showPower();
+      try { localStorage.setItem(POWER_KEY, String(aiLevel)); } catch (e) {}
+      if (aiOn) maybeAi();          // 轮到电脑时，拖完这一下立刻按新棋力走
+    };
+
+    $('btnUndo').onclick = function () { doUndo(); };
+    $('btnReplay').onclick = function () { if (replay) exitReplay(); else enterReplay(null); };
+    $('btnPrev').onclick = function () { replayStep(-1); };
+    $('btnNext').onclick = function () { replayStep(1); };
+    $('btnLive').onclick = function () { exitReplay(); };
+    $('btnCands').onclick = function () {
+      var d = document.querySelector('details.advWrap');
+      if (d) d.open = true;
+      loadCandidates();
+    };
+    $('btnReview').onclick = function () { runReview(); };
+    $('btnRules').onclick = function () {
+      $('rules').classList.add('show');
+      loadRulesText();
+    };
+    $('rulesClose').onclick = function () { $('rules').classList.remove('show'); };
+    $('rules').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') $('rules').classList.remove('show'); });
+    $('btnSkip').onclick = function () { if (humanCanPlay()) doAction({ type: 'skip' }); };
+    $('btnGiant').onclick = function () {
+      giantOn = !giantOn;
+      this.textContent = '天降：' + (giantOn ? '开' : '关');
+      newGame();
+    };
+    bindAiCfg();
+
+    // 棋盘大小：拖动即时生效，并记住（下次打开还是这个大小）
+    var zoomEl = $('zoom'), zoomValEl = $('zoomVal');
+    function applyZoom(v) {
+      document.documentElement.style.setProperty('--zoom', v / 100);
+      zoomValEl.textContent = v + '%';
+      try { localStorage.setItem('superbeast.zoom', String(v)); } catch (e) {}
+    }
+    var savedZoom = 100;
+    try { savedZoom = parseInt(localStorage.getItem('superbeast.zoom'), 10) || 100; } catch (e) {}
+    if (!(savedZoom >= 55 && savedZoom <= 160)) savedZoom = 100;
+    zoomEl.value = savedZoom;
+    applyZoom(savedZoom);
+    zoomEl.addEventListener('input', function () { applyZoom(parseInt(zoomEl.value, 10)); });
+
+    // 调试彩蛋：地址栏加 ?fx=giant 就反复放天降特效，方便看效果（不影响正常对局）
+    if (location.search.indexOf('fx=giant') >= 0 || location.search.indexOf('fx=whale') >= 0) {
+      setTimeout(playWhaleFx, 600);
+      setInterval(playWhaleFx, 1600);
+    }
+
+    // 调试彩蛋：地址栏加 ?auto=1 就自动替红方掀一张牌
+    if (location.search.indexOf('auto=1') >= 0) setTimeout(function () {
+      for (var i = 0; i < 25; i++) {
+        if (st.board[i] && !st.board[i].revealed) { doAction({ type: 'reveal', cell: i }); return; }
+      }
+    }, 900);
+
+    // 调试彩蛋：地址栏加 ?sim=escape 摆一个「蓝方吃掉红方鼠」的局面，
+    // 复验逃生落点到底归谁点——红鼠的落点必须由红方（人类）来点，AI 不许抢
+    if (location.search.indexOf('sim=escape') >= 0) setTimeout(function () {
+      function mk(kind, owner, r, c) {
+        return {
+          id: owner + '-' + kind, kind: kind, level: g.LEVEL[kind], owner: owner,
+          cell: g.idx(r, c), revealed: true, frozen: false, frozenHits: 0, jailed: 0,
+          used: { escape: false, blast: false, pounce: false, volley: false, freeze: false, shock: false, meteor: false, kunwave: false },
+          moves: 1
+        };
+      }
+      st = g.newGame({ whale: false });
+      st.board = new Array(25).fill(null);
+      st.turn = 'blue';                       // 蓝方（AI）刚动手吃掉红方的鼠
+      st.board[g.idx(3, 0)] = mk('lion', 'blue', 3, 0);
+      st.board[g.idx(4, 0)] = mk('mouse', 'red', 4, 0);
+      sel = null; pendingSkill = null; turnNo = 1;
+      logEl.innerHTML = '';
+      say('【彩蛋】蓝方狮 (3,0) 吃掉红方鼠 (4,0)', 'sys');
+      var rSim = g.applyAction(st, { type: 'move', from: g.idx(3, 0), to: g.idx(4, 0) });
+      st = rSim.state;
+      render();
+      say('落点归谁：' + (g.escapeOwner(st) || '无') + ' · 该谁操作：' + g.actorOf(st), 'sys');
+      say('AI 还会抢这一手吗：' + (aiShouldAct() ? '会 ✗（没修好）' : '不会 ✓'), aiShouldAct() ? 'bad' : 'sys');
+      say('红方现在能点落点吗：' + (humanCanPlay() ? '能 ✓' : '不能 ✗'), humanCanPlay() ? 'sys' : 'bad');
+      setTimeout(function () {
+        say('—— 假装红方点了 (4,3) ——', 'sys');
+        doAction({ type: 'escape', to: g.idx(4, 3) });
+        say('落点后的该谁操作：' + g.actorOf(st) + (g.actorOf(st) === 'red' ? ' ✓（轮到红方接着走）' : ' ✗'), 'sys');
+      }, 1200);
+    }, 600);
+
+    // 调试彩蛋：按 F9（或地址栏加 ?ui=1）就把新功能自己点一遍——悔棋/复盘/候选表/战绩/规则书，
+    // 结果全写进战报，用来肉眼核对；不影响正常对局
+    function runUiSelfCheck() {
+      var keepAi = aiOn, keepOpp = oppMode;
+      try {
+        aiOn = false; oppMode = 0;                            // 自检时别让对手插一脚
+        function hiddenCount() { var n = 0; for (var i = 0; i < 25; i++) if (st.board[i] && !st.board[i].revealed) n++; return n; }
+        var hid = -1;
+        for (var i = 0; i < 25; i++) { if (st.board[i] && !st.board[i].revealed) { hid = i; break; } }
+        say('【自检】① 掀牌 → 悔棋', 'sys');
+        doAction({ type: 'reveal', cell: hid });
+        var a1 = hiddenCount();
+        doUndo();
+        say('【自检】掀牌后剩 ' + a1 + ' 张暗牌，悔棋后回到 ' + hiddenCount() + ' 张（应为 24）', 'sys');
+        say('【自检】② 再掀一张 → 复盘步进 → 回到最新', 'sys');
+        doAction({ type: 'reveal', cell: hid });
+        enterReplay(null);
+        say('【自检】复盘：共 ' + (views ? views.length : '?') + ' 个视图，现在停在第 ' + replay.i + ' 手', 'sys');
+        replayStep(-1); replayStep(-1);
+        say('【自检】复盘停在：' + ($('replayStep') ? $('replayStep').textContent : '?') +
+            ' ｜ ' + ($('replayLabel') ? $('replayLabel').textContent : ''), 'sys');
+        exitReplay();
+        say('【自检】回到最新：暗牌 ' + hiddenCount() + ' 张 · 轮到' +
+            (st.turn === 'red' ? '红方' : '蓝方') + ' · 第 ' + turnNo + ' 回合', 'sys');
+        say('【自检】③ 候选表 + 战绩面板（右侧两张卡）', 'sys');
+        loadCandidates();
+        loadStats();
+        aiOn = keepAi; oppMode = keepOpp;
+        paintOpp();
+        setTimeout(function () {
+          say('【自检】④ 规则书弹窗', 'sys');
+          $('rules').classList.add('show');
+          loadRulesText();
+        }, 2600);
+      } catch (err) {
+        aiOn = keepAi; oppMode = keepOpp;
+        paintOpp();
+        say('【自检】✗ 出错：' + (err && err.message ? err.message : err), 'bad');
+      }
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'F9') { e.preventDefault(); runUiSelfCheck(); }
+      // 彩蛋：F10 = 把这局的棋谱手动存进本机账本（没下完也行），之后点「复盘点评」就有料
+      if (e.key === 'F10') {
+        e.preventDefault();
+        var n = (st.history || []).length;
+        saveRecord(!st.over);
+        say('这一局的棋谱存好了（' + n + ' 手，记在这台浏览器里）——点右侧「复盘点评」能让你的 AI 点评。', 'me');
+        loadStats();
+      }
+    });
+    if (location.search.indexOf('ui=1') >= 0) setTimeout(runUiSelfCheck, 900);
+
+    newGame();
+    loadStats();
+  }
+
+  // node 下（跑测试脚本）只导出能脱离 DOM 测的纯函数
+  if (inNode) {
+    if (typeof module !== 'undefined' && module.exports) module.exports = { mdToHtml: mdToHtml, splitAdvisor: splitAdvisor };
+    return;
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
+</body>
+</html>
