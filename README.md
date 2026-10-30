@@ -61,7 +61,7 @@ node game-test.js            # 回归测试，应为 206 项全通过
 node _build/build-single.mjs # 重新打单文件
 ```
 
-`_build/` 里各脚本的作用：`splice-ui.mjs` 按行号把 `_build/*.js` 片段拼回 `game-ui.js`；`splice-html.mjs` 用 `_build/BODY.html` 重写页面主体；`build-single.mjs` 产出单文件。第一次运行会把当前文件存成 `*.orig.*` 留档，重复运行结果一致。
+`_build/` 里：`build-single.mjs` 产出单文件；`normalize-names.mjs` 把源码与文档里的私人称呼统一成中性说法（幂等，可重复跑）。`splice-ui.mjs` / `splice-html.mjs` 是当初迁移界面时的一次性拼接脚本，会拿 `*.orig.*` 留档重建文件——现在别再跑，否则会把后来的改动一起盖回去。
 
 页面内置几个自检彩蛋：`?ui=1` 自动点一遍悔棋/复盘/候选/战绩/规则书并把结果写进战报，`?fx=giant` 反复放天降特效，`?sim=escape` 摆一个「鼠被吃」的局面验证逃生落点归谁点。
 
