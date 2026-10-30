@@ -1,4 +1,4 @@
-/* 船长斗兽棋 —— 逻辑引擎自测（node game-test.js） */
+/* 超能斗兽棋 —— 逻辑引擎自测（node game-test.js） */
 'use strict';
 var g = require('./game-core.js');
 
@@ -62,7 +62,7 @@ ok(kindsOf(s0, 'red') === allKinds, '红方 12 种动物齐全（随机排布没
 ok(kindsOf(s0, 'blue') === allKinds, '蓝方 12 种动物齐全');
 ok(s0.board.every(function (u) { return !u || !u.revealed; }), '开局所有牌都是背面');
 ok(g.LEVEL.cat === 2 && g.LEVEL.penguin === 3 && g.LEVEL.panda === 3.5 &&
-   g.LEVEL.roc === 6 && g.LEVEL.dino === 7.5 && g.LEVEL.elephant === 8, '等级表符合船长口径');
+   g.LEVEL.roc === 6 && g.LEVEL.dino === 7.5 && g.LEVEL.elephant === 8, '等级表符合设计口径');
 
 // ---------------------------------------------------------------- 翻牌
 section('掀牌');
@@ -187,7 +187,7 @@ ok(g.alive(esc.state, 'red') === 1, '红狮也还在');
 var escBad = act(r12.state, { type: 'escape', to: g.idx(4, 0) });   // (4,0) 现在站着刚吃它的狮子
 ok(!escBad.ok, '逃生不能落在被占的格子', escBad.error);
 
-// --- 逃生落点归谁：归鼠主人，不归吃它那一方（船长 2026-10-16 报的 bug）---
+// --- 逃生落点归谁：归鼠主人，不归吃它那一方（2026-10-16 报的 bug）---
 section('鼠 · 逃生落点归谁');
 var stMO = emptyState();                   // 蓝鼠被红狮吃 → 这一手该蓝方点
 put(stMO, 'lion', 'red', 3, 0);
@@ -310,7 +310,7 @@ ok(pd && pd.hasCat === true, '吃啥补啥：获得猫的斜向行动');
 var t19 = g.moveTargets(r19.state, g.idx(2, 3)).map(function (t) { return t.to; });
 ok(t19.indexOf(g.idx(1, 2)) >= 0, '熊猫现在真的能斜走了');
 
-// ------------------------------------------------- 熊猫只学被动（船长 2026-10-16 / 10-17 裁定）
+// ------------------------------------------------- 熊猫只学被动（2026-10-16 / 10-17 裁定）
 section('熊猫 · 只学被动、能反复用的能力');
 // 让红熊猫(2,2)吃掉(2,3)上的一只 1 级动物。
 // 把被吃者的等级压到 1 只是为了让 3.5 级的熊猫吃得动，这一段只关心「学到了什么」。
@@ -532,7 +532,7 @@ ok(rK4.ok && rK4.state.board.filter(Boolean).length === 3 &&
    '十字里的暗牌被推到最远且没有阵亡',
    rK4.state.board.map(function (u) { return u && u.kind; }).join(','));
 
-// 冰封恐龙：6.5 < 7 破不开冰，但它是「无法击杀的目标」，整块冰会被推走（船长 2026-10-18 裁定）
+// 冰封恐龙：6.5 < 7 破不开冰，但它是「无法击杀的目标」，整块冰会被推走（2026-10-18 裁定）
 var stK5 = emptyState();
 put(stK5, 'kun', 'red', 2, 2);
 var dino5 = put(stK5, 'dino', 'blue', 1, 2);
@@ -597,7 +597,7 @@ put(st25, 'cat', 'blue', 1, 2);           // 蓝方最后一只
 var r25 = act(st25, { type: 'move', from: g.idx(2, 2), to: g.idx(1, 2) });
 ok(r25.ok && r25.state.over && r25.state.result === 'red', '吃光对方即获胜');
 
-// ---- 鹏鸟贴身吃 & 己方敲冰（船长 2026 裁定）--------------------------------
+// ---- 鹏鸟贴身吃 & 己方敲冰（2026 裁定）--------------------------------
 (function () {
   function put(st, kind, owner, cell, extra) {
     var u = { kind: kind, owner: owner, cell: cell, level: g.LEVEL[kind], revealed: true,
@@ -672,7 +672,7 @@ section('UI · 该谁操作只有一处判定');
      'game-core 的 actorOf = 逃生命中看鼠主人，其余时候看回合方');
 })();
 
-// --- 虎猛扑自家冰龙破冰（船长 2026-10-17 裁定）---
+// --- 虎猛扑自家冰龙破冰（2026-10-17 裁定）---
 section('虎猛扑 · 自家冰龙');
 (function () {
   function blank2(turn) {
@@ -720,7 +720,7 @@ section('虎猛扑 · 自家冰龙');
      '猛扑自家已解冻的恐龙不允许');
 })();
 
-// --- 狮王矢敲自家冰龙（船长 2026-10-17 裁定）---
+// --- 狮王矢敲自家冰龙（2026-10-17 裁定）---
 section('狮王矢 · 自家冰龙');
 (function () {
   function blank3(turn) {
@@ -777,7 +777,7 @@ section('狮王矢 · 自家冰龙');
   ok(rv5.ok && !rv5.state.board[dc], '敌人挡在箭路上照样挨箭阵亡');
 })();
 
-// --- 冰封恐龙 = 中立困兽（船长 2026-10-17 裁定）---
+// --- 冰封恐龙 = 中立困兽（2026-10-17 裁定）---
 section('中立困兽 · 冰封中的恐龙');
 (function () {
   function blank4(turn) {
@@ -835,7 +835,7 @@ section('中立困兽 · 冰封中的恐龙');
      '狮王矢射中对面挡路的冰龙，同样只敲一层冰');
 })();
 
-// --- 伤害账：军师别乱放技能（船长 2026-10-17 报告：本地 AI 对着 7 级狮 + 8 级象放豹的自爆）---
+// --- 伤害账：军师别乱放技能（2026-10-17 报告：本地 AI 对着 7 级狮 + 8 级象放豹的自爆）---
 section('伤害账 · 军师别乱放技能');
 (function () {
   var ai = require('./game-ai.js');
@@ -926,7 +926,7 @@ section('伤害账 · 军师别乱放技能');
 })();
 
 // ---------------------------------------------------------------- 决算判定
-section('决算判定：无人可挡的动物不该被拖成反败（2026-10-18 船长反馈）');
+section('决算判定：无人可挡的动物不该被拖成反败（2026-10-18 反馈）');
 (function () {
   function txtOf(res) { return ((res && res.events) || []).map(function (e) { return e.text; }).join(' | '); }
   // 双方来回踱步，把 idle 推到 20 触发决算。红方鼠在 (0,1)<->(0,2)，蓝方踱步子放在 (4,4)<->(3,4)
@@ -965,7 +965,7 @@ section('决算判定：无人可挡的动物不该被拖成反败（2026-10-18 
   ok(!z3.err && z3.st.result === 'blue', '蓝方有象 8 能处理龙：回到总和，蓝胜', z3.err || ('result=' + z3.st.result));
   ok(z3.err ? false : /等级总和/.test(txtOf(z3.res)), '这时文案才是「按场上等级总和决算」', txtOf(z3.res));
 
-  // 4) 冰封的龙是「中立困兽」：不算战力、也不算无人可挡（船长 2026-10-18 裁定：
+  // 4) 冰封的龙是「中立困兽」：不算战力、也不算无人可挡（2026-10-18 裁定：
   //    解不解封是它主人的决策问题，决算不替它兜底）
   var a4 = emptyState();
   put(a4, 'dino', 'red', 0, 0, true).frozen = true;
@@ -981,7 +981,7 @@ section('决算判定：无人可挡的动物不该被拖成反败（2026-10-18 
   ok(!z5.err && z5.st.result === 'red', '双方顶子互吃：仍按等级总和（红 8 / 蓝 7）', z5.err || ('result=' + z5.st.result));
   ok(z5.err ? false : /等级总和/.test(txtOf(z5.res)), '势均力敌时判决仍走总和', txtOf(z5.res));
 
-  // 6) 船长的局面（2026-10-18 问的）：红 象8 + 龙7.5 / 蓝 狮7 虎6 鼠1 豹5
+  // 6) 关键局面（2026-10-18 问的）：红 象8 + 龙7.5 / 蓝 狮7 虎6 鼠1 豹5
   //    鼠吃得动象（特例），但咬不动 7.5 的龙 → 只有龙无人可挡，红胜
   var a6 = emptyState();
   put(a6, 'elephant', 'red', 0, 1); put(a6, 'dino', 'red', 0, 4);
